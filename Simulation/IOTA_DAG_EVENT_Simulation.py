@@ -25,7 +25,7 @@ if __name__ == '__main__':
     IOTA_DAG = IOTA_DAG(poisson_rate, milestones_interval, network)
     IOTA_DAG.coordinator = network.coordinator
     IOTA_DAG.coordinator_genesis_milestone()
-    network.draw_network()
+    # network.draw_network()
     transactions = IOTA_DAG.simulate(sim_time, network)
 
     for node in network.nodes:

@@ -297,7 +297,7 @@ class Coordinator(Node):
         # Generate RSA key pair for the Coordinator
         self.coordinator_public_key, self.coordinator_private_key = rsa.newkeys(512)
         self.is_coordinator = is_coordinator  # Override the attribute
-        log_file = f"logs_3/{self.name}.log"
+        log_file = f"logs/{self.name}.log"
         self.logger = setup_logger(self.name, log_file)
         self.last_milestone_time = datetime.fromtimestamp(time.time())
 
