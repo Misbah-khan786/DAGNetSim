@@ -1,0 +1,869 @@
+import random
+import os
+import rsa
+import math
+import time
+import networkx as nx
+import matplotlib.pyplot as plt
+import threading
+from datetime import datetime
+plt.ion()
+
+from Transaction.transaction import Transaction
+from RandomWalker.randomwalker import RandomWalker
+from Network.node import Node, Coordinator
+# from Network.node import Node
+
+class IOTA_DAG:
+    def __init__(self, poisson_rate, milestones_interval, network ):
+        self.creation_time = datetime.now()
+        self.network = network
+        self.poisson_rate = poisson_rate
+        self.transactions = {}
+        self.tips = []
+        self.graph = nx.DiGraph()
+        self.batch_num = 0  # initialize batch number
+        self.batches = []  # list of batches
+        self.num_batches = 0  # store the number of batches
+        self.current_batch = 0  # store the current batch number
+        self.coordinator = None
+        self.milestones_interval = milestones_interval
+        self.print_lock = threading.Lock()  # assuming print_lock is a threading.Lock() object
+
+    def coordinator_genesis_milestone(self):
+        # Generate a random data string
+        data = os.urandom(500000)  # generates 500,000 bytes = 0.5 MB
+        data = data.decode('latin1')  # decode bytes to string using 'latin1' encoding
+        # Create the genesis transaction with no parent transactions and with data
+        genesis_milestone = Transaction("0", [], None, data)
+        # Sign the transaction's data using the Coordinator's private key
+        genesis_milestone.signature = rsa.sign(
+            genesis_milestone.get_data_to_sign(),
+            self.coordinator.private_key,
+            'SHA-256'
+        )
+        # Use Coordinator's method to broadcast the milestone to all peers
+        start_time = datetime.now()
+        self.tips.append(genesis_milestone)
+        self.coordinator.broadcast_milestone(genesis_milestone)
+        # Add the genesis milestone to the transactions of DAG_Event
+        self.transactions[genesis_milestone.txid] = genesis_milestone
+
+        threads = []
+        for node in self.network.nodes:
+            if node != self.coordinator:
+                delay = self.network.delay_matrix[(self.coordinator, node)]
+                thread = threading.Thread(target=self.process_node, args=(node, delay))
+                threads.append(thread)
+                thread.start()
+
+        for thread in threads:
+            thread.join()
+
+        end_time = datetime.now()
+        total_time = end_time - start_time
+        print(
+            f"Total time taken by Coordinator to broadcast to all its peers: {total_time.seconds} seconds, {total_time.microseconds} microseconds")
+
+        # # Update and draw graphs for each node after broadcasting the genesis transaction
+        # for node in self.network.nodes:
+        #     self.update_and_draw_graphs(node)
+
+    def process_node(self, node, delay):
+        time.sleep(delay)
+        with self.print_lock:  # assuming print_lock is a threading.Lock() object
+            print(f"Transaction received by {node.name} from {self.coordinator.name} with delay: {delay} seconds")
+            print("Number of transactions for node", node.name, ":", len(node.nodes_received_transactions))
+
+
+    def add_transactions(self, node, network):
+        print(f"{node.name} Started Genrating the Transaction")
+        start_time = datetime.now()
+        new_transactions = []
+        last_timestamp = None
+        nodes_tips = list(node.tips)  # Create a copy of the tips
+        if not nodes_tips:
+            return
+        # Instantiate the random walker
+        random_walker = RandomWalker(W=3, N=2, alpha_low=0.01, alpha_high=1.0)
+        new_transactions = []
+        random_walk_tips = random_walker.walk_event(self, nodes_tips)
+        # if len(set(nodes_tips)) < 2:
+        #     random_walk_tips = [nodes_tips[0], nodes_tips[0]]
+        # else:
+        #     random_walk_tips = random_walker.walk_event(self, nodes_tips)
+        tips = random_walk_tips
+        if not isinstance(tips, list):
+            tips = [tips]  # Convert to list if not a list
+        # Validate signatures of parent transactions
+        valid = True
+        for parent in tips:
+            # Skip the genesis transaction
+            if parent.txid == "0":
+                continue
+            if not parent.validate_transaction():
+                print(f"Invalid signature detected in parent transaction: {parent.txid}. Skipping this transaction.")
+                valid = False
+                break
+            if valid:
+                print("Parent transaction(s) have valid signatures. No double spending detected.")
+        txid = str(len(self.transactions))
+        parent_txids = list(set(parent.txid for parent in tips))
+        tx = node.create_and_sign_transaction(txid, parent_txids)
+        # Update parent_transactions
+        tx.parent_transactions = [self.transactions[parent_id] for parent_id in parent_txids]
+        self.transactions[txid] = tx
+        # Broadcast the transaction to all peers
+        print(
+            f"{datetime.now().strftime('%H:%M:%S.%f')} - {node.name} started broadcasting the TRANSACT ID: {tx.txid}")
+        node.broadcast_transaction(tx, self)
+
+
+        new_transactions.append(tx)
+        tx.batch_num = self.batch_num
+
+        for parent in tx.parent_transactions:
+            print(f" Parent Trantion of transact ID: {tx.txid} are {parent.txid}")
+            parent.children.append(tx)
+            print(f"Childern are added {tx.children}")
+
+            if len(parent.children) == 1:
+                self.tips.append(parent)
+
+        for parent in parent_txids:
+            self.graph.add_edge(parent, txid)
+        self.coordinator.cooridnator_view(tx)
+        if network.transaction_received_by_all(txid):
+            print(f"Transaction ID {tx.txid} has been received by all nodes.")
+        print(f"Batch {self.batch_num}: Added {tx} to DAG.")
+        end_time = network.get_last_receive_time(txid)
+        total_time = end_time - start_time
+        print(f"Total time for transaction {txid} to reach all nodes: {total_time}")
+        #self.draw()
+
+        #Generate milestone
+        if  self.batch_num % self.milestones_interval == 0:
+            milestone_thread = threading.Thread(target=self.invoke_generate_milestone_after_delay)
+            milestone_thread.start()
+
+        # # update tips at the end of the batch
+        # self.tips.append(tx)
+        # print(f"{node.name} added transaction {tx.txid} as new tip")
+
+        self.tips = [tx for tx in self.tips + list(self.transactions.values()) if not tx.children]
+        self.batches.append(new_transactions)
+        self.batch_num += 1
+
+        # Update accumulative weights
+        self.update_weights_topological_order()
+        # Update branch weights
+        for tx in new_transactions:
+            tx.update_branch_weight()
+
+    def invoke_generate_milestone_after_delay(self):
+        while True:
+            time.sleep(self.milestones_interval)  # Adjustable time delay as needed
+            self.coordinator.generate_milestone()
+
+    def update_weights_topological_order(self):
+        # Get a topological order of the transactions
+        order = list(nx.topological_sort(self.graph))
+
+        # Print the order
+        print("Topological order of transactions:", order)
+
+        # Update the weights in this order
+        for txid in order:
+            tx = self.transactions[txid]
+            tx.update_accumulative_weight()
+
+    import time
+
+    def simulate(self, sim_time, network):
+        start_time = time.time()  # Get the current time
+        transactions = []
+
+        nodes_without_coordinator = [node for node in network.nodes if not isinstance(node, Coordinator)]
+        # Shuffle the nodes list to randomize the order
+        random.shuffle(nodes_without_coordinator)
+
+        while True:
+            current_time = time.time()  # Update the current time
+
+            # If the elapsed time is more than the desired run time, break the loop
+            if current_time - start_time >= sim_time * 60:  # Convert minutes to seconds
+                break
+
+            self.current_batch = len(self.transactions)  # Store the current batch number
+            print("Current batch", self.current_batch)
+            # Get number of transactions for this node
+            num_transactions = math.ceil(random.expovariate(self.poisson_rate))
+
+            for _ in range(num_transactions):
+
+                for node in nodes_without_coordinator:
+                    tx = self.add_transactions(node, network)
+
+                    # Add new transaction to list
+                    if tx and tx.parent_txids:
+                        transactions.append(tx)
+
+                    print(f"Batch {self.current_batch}: Node {node.name} added 1 transaction to DAG.")
+
+                    # Update branch weights for all transactions
+                    for tx in self.transactions.values():
+                        tx.update_branch_weight()
+                    self.draw()
+
+            # Print updated weights
+            self.print_weights()
+            # self.draw()
+
+        return transactions
+
+    def print_weights(self):
+        print("\nUpdated accumulative weights and branch weights:")
+        for txid, tx in self.transactions.items():
+            print(
+                f"Transaction {txid}: Accumulative weight = {tx.accumulative_weight}, Branch weight = {tx.branch_weight}")
+        print("\n")
+
+    ###############################################
+    def draw(self):
+        # Create a directed graph object
+        G = nx.DiGraph()
+
+        # Set node colors and labels
+        node_colors = {}
+        node_labels = {}  # Store node labels
+        depth_map = {}
+        max_depth = 0
+
+        for tx in self.transactions.values():
+
+            # Add transaction ID as a label
+            label = f"ID: {tx.txid}\nAW: {tx.accumulative_weight}"
+            node_labels[tx.txid] = label
+
+            # Determine the color of the node
+            if tx.txid == '1':  # assuming you have an `is_genesis` property
+                node_colors[tx.txid] = 'orange'  # Orange for genesis transaction
+                depth_map[tx.txid] = 1
+
+            elif tx in self.tips and tx.txid != "0":
+                node_colors[tx.txid] = 'grey'  # grey for tips
+                depth_map[tx.txid] = max((depth_map[parent_txid] + 1 for parent_txid in tx.parent_txids),default= 0)
+                max_depth = max(max_depth, depth_map[tx.txid])
+            elif tx.is_confirmed:
+                node_colors[tx.txid] = 'green'  # green for confirmed transactions
+                depth_map[tx.txid] = max((depth_map[parent_txid] + 1 for parent_txid in tx.parent_txids), default=0)
+                max_depth = max(max_depth, depth_map[tx.txid])
+            else:
+                node_colors[tx.txid] = 'blue'  # blue for other nodes
+                depth_map[tx.txid] = max((depth_map[parent_txid] + 1 for parent_txid in tx.parent_txids),default= 0)
+                max_depth = max(max_depth, depth_map[tx.txid])
+
+        # Get node positions
+        pos = {}
+        for tx in self.transactions.values():
+            depth = depth_map[tx.txid]
+            same_depth_txs = [t for t, d in depth_map.items() if d == depth]
+            level_size = len(same_depth_txs)
+            index_in_level = same_depth_txs.index(tx.txid)
+            vertical_position = (index_in_level + 1) / (level_size + 1)  # to make it range between 0 and 1
+            pos[tx.txid] = (depth, vertical_position)
+
+        # Convert node_colors to list maintaining the order of transactions
+        node_colors_list = [node_colors[tx.txid] for tx in self.transactions.values()]
+
+        # Add edges to the graph and set their colors
+        edge_colors = []
+        for tx in self.transactions.values():
+            for parent_txid in tx.parent_txids:
+                G.add_edge(tx.txid, parent_txid)
+                # G.add_edge(parent_txid, tx.txid)
+                edge_colors.append('grey' if parent_txid == '0' else 'blue')
+
+        # Draw the graph
+        plt.figure(figsize=(10, 5))
+        nx.draw(G, pos=pos, node_color=node_colors_list, node_size=1000, node_shape='s', edge_color=edge_colors)
+        nx.draw_networkx_labels(G, pos, labels=node_labels, font_size=8)
+        plt.title(f'Batch {self.current_batch}')
+        plt.ylim(0, 1)  # Make sure all nodes fit in the figure
+        plt.xlim(-1, max_depth + 2)
+        #plt.savefig(f'Figures/my_plot_{self.current_batch}.png')
+        plt.pause(1)
+        plt.show(block=True)
+
+------------------------------------------------------
+
+import rsa
+import datetime
+from datetime import datetime
+import time
+import os
+import simpy
+from Transaction.transaction import Transaction
+from queue import Queue
+import asyncio
+import threading
+import logging
+
+
+def setup_logger(log_file, level=logging.INFO):
+    # Create the logs directory if it doesn't exist
+    if not os.path.exists('logs'):
+        os.makedirs('logs')
+    handler = logging.FileHandler(log_file, mode='w')
+    # Including time in the log messages
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+    handler.setFormatter(formatter)
+    logger = logging.getLogger()
+    logger.setLevel(level)
+    logger.addHandler(handler)
+    return logger
+
+#Define a class called Node, representing a participant in the network
+class Node:
+    # Initialization function to set up a new Node
+    def __init__(self, name, network, delay_range=(2, 7)): #is_coordinator=False
+
+        self.network = network
+        self.delay_range = delay_range
+        # # The Node knows whether it's a coordinator
+        # self.is_coordinator = is_coordinator
+        # Assign the name passed as an argument to the Node's name
+        self.name = name
+        # Generate a pair of RSA keys for the Node, one public and one private
+        (self.public_key, self.private_key) = rsa.newkeys(512)
+        # Initialize an empty list to store the Node's transactions
+        self.transaction_list = []
+        # Initialize an empty list to store the Node's unconfirmed/confirmed transactions
+        self.unconfirmed_transactions = []
+        self.confirmed_transactions = []
+        # Initialize an empty list to store the Node's peers
+        self.peers = []
+        # Initialize an empty list to store the Node's milestones
+        self.milestones = []
+        self.genesis_milestone = None  # to recieve Gensis milestone by Nodes in Dag_Event class
+        self.nodes_received_transactions =[]
+        self.transaction_queue = Queue()  # queue for incoming transactions
+        self.tips=[]
+        self.broadcasted_transactions = []
+
+        self.is_coordinator = False
+
+        self.coordinator_public_key = None
+
+        self.env = simpy.Environment()  # Initialize the env attribute
+
+        # Configure the logger for the node
+        log_file = f"logs/{self.name}.log"
+        self.logger = setup_logger(log_file)
+        # self.logger = setup_logger(f"{self.name}.log", level=logging.INFO)
+
+        self.transaction_lock = threading.Lock()
+        self.transaction_timestamps = {}
+        self.transaction_list_lock = threading.Lock()
+        self.tips_lock = threading.Lock()
+
+
+    def create_and_sign_transaction_event(self, txid, parent_txids):
+
+        # Generate a random data string
+        data = os.urandom(500000)  # generates 500,000 bytes = 0.5 MB
+        data = data.decode('latin1')  # decode bytes to string using 'latin1' encoding
+
+        # Create a new Transaction object
+        transaction = Transaction(txid, parent_txids, self,data)
+        # Sign the transaction's data using the Node's private key
+        transaction.signature = rsa.sign(
+            transaction.get_data_to_sign(),
+            self.private_key,
+            'SHA-256'
+        )
+        # Add the signed transaction to the Node's list of transactions
+        self.transaction_list.append(transaction)
+        print(f"{self.name} GENRATED transaction ID : {transaction.txid}")
+        self.logger.info(f"{self.name} GENRATED transaction ID: {transaction.txid}")
+        # Broadcast the transaction to all peers
+        #self.broadcast_transaction_event(transaction)
+        # print(f"{self.name}broadcasted transaction{transaction.txid}")
+        # Return the signed transaction
+        # Add the signed transaction to the Node's list of unconfirmed transactions
+        self.unconfirmed_transactions.append(transaction)
+        # This is a new tip
+        self.tips.append(transaction)
+        tip_ids = list(set([tip.txid for tip in self.tips])) # Extract tip IDs
+        print(f"{self.name} added transaction{transaction.txid} to its tips:{tip_ids}")
+        self.logger.info(f"{self.name} added transaction{transaction.txid} to its tips:{tip_ids}")
+
+        # If this transaction references any previous tips, remove them from the tips list
+        for parent in transaction.parent_transactions:
+            if parent in self.tips:
+                self.tips.remove(parent)
+                print(f"this transaction references any previous tips, remove them from the tips list")
+        return transaction
+
+    def broadcast_transaction_event(self, transaction):
+        if transaction.txid not in self.broadcasted_transactions:
+            self.broadcasted_transactions.append(transaction.txid)
+            for peer in self.peers:
+                peer.transaction_queue.put(transaction)
+                delay = self.network.delay_matrix[(self, peer)]
+                # print(f"Delay between {self.name} and {peer.name} is {delay} :BRO")
+                # self.logger.info(f"Delay between {self.name} and {peer.name} is {delay}: BRO")
+                peer.receive_transaction_event(delay)
+
+
+    def receive_transaction_event(self,delay):
+        print("Nodes started Receiving the Transaction")
+        # self.logger.info(f"{self.name} started Receiving the Transaction")
+        time.sleep(delay)
+        while True:
+            if not self.transaction_queue.empty():
+                transaction = self.transaction_queue.get()  # Retrieve a transaction from the queue
+                # print(f"The transaction Buffer/Queue pf {node.name} so far: {transaction.txid}")
+                # self.logger.info(f"The transaction Buffer/Queue pf {node.name} so far: {transaction.txid}")
+                print(f"{self.name} Revieved the Transaction ID: {transaction.txid}")
+                self.logger.info(f"{self.name} Revieved the Transaction ID: {transaction.txid}")
+                if transaction.txid in [t.txid for t in self.nodes_received_transactions]: # and transac
+                    # print(f"Node {self.name} already has an updated version of the DAG.")
+                    continue
+                # if not transaction.validate_transaction():
+                #     print(f"Invalid transaction signature: {transaction.txid}")
+                #     continue
+                if transaction not in self.transaction_list:
+                    self.nodes_received_transactions.append(transaction)
+                    print(f"Transaction {transaction.txid} has been added to received Transactions of {self.name}")
+                    self.logger.info(f"Transaction {transaction.txid} has been added to received Transactions of {self.name}")
+                if not transaction.children:
+                    self.tips.append(transaction)
+                    tip_ids = list(set([tip.txid for tip in self.tips]))  # Extract tip IDs
+                    print(f"Transaction {transaction.txid} didn't have children, so it has been added to the tip list:{tip_ids} of {self.name}")
+                    self.logger.info(f"Transaction {transaction.txid} didn't have children, so it has been added to the tip list:{tip_ids}  of {self.name}")
+
+                for parent in transaction.parent_transactions:
+                    if parent in self.tips:
+                        self.tips.remove(parent)
+                        print(f"Transaction {parent.txid} is no longer a tip")
+                        self.logger.info(f"Transaction {parent.txid} is no longer a tip")
+
+                if transaction not in self.broadcasted_transactions:
+                    self.broadcast_transaction_event(transaction)
+                tip_ids = list(set([tip.txid for tip in self.tips]))
+                print(f"Tips of {self.name}, {tip_ids}")
+                self.logger.info(f"Tips of {self.name}, {tip_ids}")
+
+            else:
+                break
+
+            #  # Output the IDs of the tips
+            # tip_ids = list(set([tip.txid for tip in self.tips]))
+            # print("IDs of tips:", tip_ids)
+
+    def create_and_sign_transaction(self, txid, parent_txids):
+
+        # Generate a random data string
+        data = os.urandom(500000)  # generates 500,000 bytes = 0.5 MB
+        data = data.decode('latin1')  # decode bytes to string using 'latin1' encoding
+
+        # Create a new Transaction object
+        transaction = Transaction(txid, parent_txids, self,data)
+        # Sign the transaction's data using the Node's private key
+        transaction.signature = rsa.sign(
+            transaction.get_data_to_sign(),
+            self.private_key,
+            'SHA-256'
+        )
+        # Add the signed transaction to the Node's list of transactions
+        with self.transaction_list_lock:
+            self.transaction_list.append(transaction)
+        print(f" {datetime.now().strftime('%H:%M:%S.%f')} - {self.name} GENRATED THE TRANSACT ID: {transaction.txid}")
+
+        with self.tips_lock:
+            self.tips.append(transaction)
+        tip_ids = list(set([tip.txid for tip in self.tips]))  # Extract tip IDs
+        print(f"{self.name} added transaction{transaction.txid} to its tips:{tip_ids}")
+
+        # If this transaction references any previous tips, remove them from the tips list
+        for parent in transaction.parent_txids:
+            if parent in self.tips:
+                with self.tips_lock:
+                    self.tips.remove(parent)
+                print(f"this transaction references any previous tips, remove them from the tips list")
+
+        #
+        # # Broadcast the transaction to all peers
+        # print(
+        #     f"{datetime.now().strftime('%H:%M:%S.%f')} - {self.name} started broadcasting the TRANSACT ID: {transaction.txid}")
+        # self.broadcast_transaction(transaction, self)
+        #
+        # # Return the signed transaction
+        return transaction
+
+    def broadcast_transaction(self, transaction, sender=None):
+        # Randomly choose num_peers peers
+        #peers_to_inform = random.sample(self.peers, num_peers)  #(Gossip Protocol)
+        threads = []
+        # Send the transaction to all peers
+        for peer in self.peers:
+            if peer == sender:
+                continue
+            # print(f" {datetime.now().strftime('%H:%M:%S.%f')} - {self.name} is broadcasting transaction ID {transaction.txid} to {peer.name}")
+            delay = self.network.delay_matrix[(self, peer)]
+            if transaction.txid not in self.transaction_list:
+                thread = threading.Thread(target=peer.receive_transaction, args=(transaction, self, delay))
+                threads.append(thread)
+                thread.start()
+                # Wait for all threads to complete
+        for thread in threads:
+            thread.join()
+
+    def receive_transaction(self, transaction, sender=None, delay=None):
+        with self.transaction_lock:
+            # Check if the transaction has already been received
+            if transaction in self.nodes_received_transactions:
+                return
+            if transaction in self.transaction_list:
+                return
+            # Add the transaction to the list of unconfirmed transactions
+            self.unconfirmed_transactions.append(transaction)
+
+        time.sleep(delay)
+
+        with self.transaction_lock:
+            # Validate the transaction
+            if not transaction.validate_transaction():
+                print(f"Invalid transaction signature: {transaction.txid}")
+                return
+
+            self.nodes_received_transactions.append(transaction)
+            self.transaction_timestamps[transaction.txid] = datetime.now()
+            print(
+                f"{datetime.now().strftime('%H:%M:%S.%f')} - {self.name} received Transaction ID {transaction.txid} after delay {delay} from {sender.name}")
+
+            # If the transaction has no children, add it to the tips and if its a parent then remove it from tip list
+            with self.tips_lock:
+                if not transaction.children and transaction not in self.tips:
+                    print(
+                        f" Transaction ID : {transaction.txid} do not have childern, thats why added to tip of {self.name}")
+                    self.tips.append(transaction)
+                for parent in transaction.parent_transactions:
+                    if parent in self.tips:
+                        self.tips.remove(parent)
+                        print(f" Transaction {parent.txid} is no longer a tip for {self.name}")
+
+            ip_ids = list(set([tip.txid for tip in self.tips]))
+            print(f"Tips of {self.name}, {ip_ids}")
+
+        # Forward the transaction to the peers of this node
+        self.broadcast_transaction(transaction, sender)
+
+
+    def is_double_spent(self, transaction):
+        # Check if the transaction spends from an address that has already been spent
+        # Check if the transaction is already in the node's transaction list
+        for tx in self.transaction_list:
+            if tx != transaction and tx.node == transaction.node and tx.txid == transaction.txid:
+                return True
+        return False
+
+    def receive_milestone(self, milestone):
+        # Store the milestone
+        self.milestones.append(milestone)
+        # Validate the signature of the milestone
+        if self.validate_milestone_signature(milestone):
+            # Validate and confirm transactions in the milestone
+            for transaction in milestone['validated_transactions']:
+                #print("Transactions from Milestone",transaction)
+                self.validate_and_confirm(transaction)
+
+            return True
+        else:
+            return False
+        # if self.validate_milestone_signature(milestone):
+        #     return True
+        # else:
+        #     return False
+
+    def validate_and_confirm(self, transaction):
+        # existing validation code...
+        transaction.confirm()  # confirm the transaction
+
+    def validate_milestone_signature(self, milestone):
+        # Verify the signature of the milestone using the coordinator's public key
+        if isinstance(milestone, dict):  # For regular milestones represented as dictionaries
+            milestone_data = f"{milestone['index']}Coordinator".encode()
+            try:
+                rsa.verify(milestone_data, milestone['signature'], self.coordinator_public_key)
+                return True
+            except rsa.VerificationError:
+                return False
+        elif isinstance(milestone, Transaction):  # For the genesis milestone represented as a Transaction
+            # Perform validation for a Transaction object
+            try:
+                rsa.verify(
+                    milestone.get_data_to_sign(),
+                    milestone.signature,
+                    self.coordinator_public_key
+                )
+                return True
+            except rsa.VerificationError:
+                return False
+        else:
+            raise ValueError("Invalid type for milestone. Expected dict or Transaction.")
+
+    def receive_genesis_milestone(self, genesis_milestone):
+        # Store the milestone
+        self.genesis_milestone = genesis_milestone
+        # Validate the signature of the milestone
+        self.nodes_received_transactions.append(genesis_milestone)
+        self.tips.append(genesis_milestone)
+        if self.validate_milestone_signature(genesis_milestone):
+            # Validate and confirm the single transaction in the milestone
+            self.validate_and_confirm(genesis_milestone)
+            # Store the milestone in the received transactions
+            self.nodes_received_transactions.append(genesis_milestone)
+            return True
+        else:
+            return False
+
+class Coordinator(Node):
+    def __init__(self, name, network, milestones_interval, is_coordinator=False):
+        super().__init__(name, network)
+        self.milestones_interval = milestones_interval
+        self.milestones = []
+        self.transaction_list = []
+        self.timestamp = datetime.now().strftime('%H:%M:%S.%f')[:-3]  # Gives you time up to milliseconds
+        self.timestamp += str(int(time.time() * 1e9))[-6:]  # Append the last six digits of the current nanosecond time
+        self.peers = []  # Initialize an empty list to store the Coordinator's peers
+        # Generate RSA key pair for the Coordinator
+        self.coordinator_public_key, self.coordinator_private_key = rsa.newkeys(512)
+        self.is_coordinator = is_coordinator  # Override the attribute
+        log_file = f"logs/{self.name}.log"
+        self.logger = setup_logger(log_file)
+
+    def cooridnator_view(self, transaction):
+        self.transaction_list.append(transaction)
+        # print("TRANASCTION IN COORDINATOR VIEW:")
+        # # for transaction in self.transaction_list:
+        # #     print(transaction.txid, transaction.batch_num)
+
+    def generate_milestone(self):
+        # # Update timestamp for each new milestone
+        # self.timestamp = datetime.now().strftime('%H:%M:%S.%f')[:-3]
+        # self.timestamp += str(int(time.time() * 1e9))[-6:]  # Append the last six digits of the current nanosecond time
+
+        recent_transactions = self.get_recent_transactions()
+        milestone_index = len(self.milestones) + 1
+        milestone = {
+            'index': milestone_index,
+            'timestamp': self.timestamp,
+            'signature': self.sign_milestone(milestone_index),
+            'validated_transactions': []
+        }
+
+        # Convert list of validated transactions to a set for efficient membership testing
+        validated_txids = set(t.txid for t in milestone['validated_transactions'])
+
+        # Validate the signature and double spending for recent transactions
+        for tx in recent_transactions:
+            if not tx.validate_transaction():
+                print(f"Invalid signature detected in transaction: {tx.txid}")
+
+            elif self.is_double_spent(tx):
+                print(f"Double spending detected in transaction: {tx.txid}")
+
+            elif tx.txid not in validated_txids:
+                milestone['validated_transactions'].append(tx)
+                # Once the transaction is validated and added, also add its id to the set
+                validated_txids.add(tx.txid)
+
+        self.milestones.append(milestone)
+        self.broadcast_milestone(milestone)
+
+        # Print milestone information
+        print(f"Milestone {milestone['index']} generated at {milestone['timestamp']}.")
+        transaction_ids = [f"Txid={tx.txid}" for tx in milestone['validated_transactions']]
+        if transaction_ids:
+            print(f"Validated transactions: {', '.join(transaction_ids)}")
+        else:
+            print(f"No transactions added since the last Mileston")
+
+    def sign_milestone(self, milestone_index):
+        # Sign the milestone using the coordinator's private key
+        milestone_data = f"{milestone_index}{self.name}".encode()
+        signature = rsa.sign(milestone_data, self.coordinator_private_key, 'SHA-256')
+        return signature
+
+    def broadcast_milestone(self, milestone):
+        valid_count = 0
+        # Send the milestone to all peers in the network
+        for peer in self.peers:
+            if isinstance(milestone, Transaction):  # If milestone is a Transaction object (genesis milestone)
+                # delay = self.network.delay_matrix[(self, peer)]
+                # if peer.receive_genesis_milestone(milestone,delay):
+                if peer.receive_genesis_milestone(milestone):
+                    valid_count += 1
+            elif isinstance(milestone, dict):  # If milestone is a dictionary (regular milestone)
+                if peer.receive_milestone(milestone):
+                    valid_count += 1
+        # Log the broadcasted milestone
+        if isinstance(milestone, Transaction):  # If milestone is a Transaction object (genesis milestone)
+            print(
+                f"Genesis milestone (ID: {milestone.txid}) has been broadcasted by coordinator to all peers and validated by {valid_count} out of {len(self.peers)} peers.")
+        elif isinstance(milestone, dict):  # If milestone is a dictionary (regular milestone)
+            print(
+                f"Milestone {milestone['index']} has been broadcasted by coordinator to all peers and validated by {valid_count} out of {len(self.peers)} peers.")
+
+    def get_recent_transactions(self):
+        current_time_str = datetime.now().strftime('%H:%M:%S.%f')
+        current_time = datetime.strptime(current_time_str, '%H:%M:%S.%f')
+
+        recent_transactions = []
+        for tx in self.transaction_list:
+            # tx_time is already a datetime object, no need for conversion
+            tx_time = tx.timestamp
+
+            # Check if the transaction was created in the recent interval
+            if (current_time - tx_time).total_seconds() <= self.milestones_interval:
+                recent_transactions.append(tx)
+
+        return recent_transactions
+
+    # def run(self):
+    #     while True:
+    #         self.generate_milestone()
+    #         time.sleep(self.milestones_interval)
+
+
+------------------------------------------------------------------------Random walk without threading
+
+    def walk_event(self, dag, prev_tips):
+        print(f" {self.node} TIP SELECTION STARTS")
+        self.logger.info(f"{datetime.now().strftime('%H:%M:%S.%f')} - {self.node} STARTS RANDOM WALK")
+
+        # Get the current time
+        current_time = datetime.now()
+
+        # Define the interval (W to WD seconds)
+        w = 45# Start of interval, in seconds
+        wd = w * 2  # End of interval, in seconds
+        # for tx in dag.transactions.values():
+        #     print(f" Transaction {tx.txid} was  created at {tx.timestamp} with parent {tx.parent_txids} .")
+
+        # If the DAG is younger than the specified interval (WD seconds), adjust WD
+        if current_time - dag.creation_time < timedelta(seconds=wd):
+            wd = int((current_time - dag.creation_time).total_seconds())
+            print(f"DAG is younger than {wd} seconds, adjusted [W,2W] to the DAG's age")
+            self.logger.info(f"{datetime.now().strftime('%H:%M:%S.%f')} - For {self.node} : DAG is younger than {wd} seconds, adjusted [W,2W] to the DAG's age  ")
+
+        # Get the start and end times for the interval
+        start_time = current_time - timedelta(seconds=wd)
+        end_time = current_time - timedelta(seconds=w)
+
+        # Get all transactions that happened within the interval
+        interval_transactions = [tx for tx in dag.transactions.values() if start_time <= tx.timestamp <= end_time]
+
+
+        print(f"Transactions from the past {w}-{wd} seconds:")
+        self.logger.info(f"{datetime.now().strftime('%H:%M:%S.%f')} -  For {self.node} Transactions from the past {w}-{wd} seconds:")
+        print(', '.join("Txid=" + str(transaction.txid) for transaction in interval_transactions))
+        self.logger.info(', '.join("Txid=" + str(transaction.txid) for transaction in interval_transactions))
+
+        if len(interval_transactions) < self.N:
+            start_transactions = interval_transactions
+            print(f"Not enough transactions in the interval, selected all {len(start_transactions)} transactions")
+            self.logger.info(f"{datetime.now().strftime('%H:%M:%S.%f')} - {self.node} : Not enough transactions in the interval, selected all {len(start_transactions)} transactions")
+        else:
+            # Randomly select N transactions from the interval
+            start_transactions = random.sample(interval_transactions, self.N)
+            print(f"Randomly selected N={self.N} transactions from the interval:")
+            self.logger.info(f"{datetime.now().strftime('%H:%M:%S.%f')} -For {self.node}:Randomly selected N={self.N} transactions from the interval:")
+            print(', '.join("Txid=" + str(transaction.txid) for transaction in start_transactions))
+            self.logger.info(', '.join("Txid=" + str(transaction.txid) for transaction in start_transactions))
+
+        # Let the transactions perform independent random walks towards the tips
+        reached_tips = []
+        tip_paths = {}
+        #print("Starting random walk for selected N transactions")
+        for start_transaction in start_transactions:
+            print("Random walk loop started for transaction Txid=",  start_transaction.txid)
+            self.logger.info(f"{datetime.now().strftime('%H:%M:%S.%f')} - For {self.node} Random walk loop started for transaction Txid= {start_transaction.txid}")
+            current_transaction = start_transaction
+            print("current transaction is Txid", current_transaction.txid)
+            self.logger.info(f"{datetime.now().strftime('%H:%M:%S.%f')} - For {self.node} current transaction is Txid = {current_transaction.txid} ")
+            path = [start_transaction]
+            while current_transaction.children:
+                #print("while current transaction has childern or not reach to the tip")
+                if self.alpha_low == 0:
+                    # Unbiased random walk: all children have equal probability
+                    probabilities = [1 / len(current_transaction.children)] * len(current_transaction.children)
+                    print("Unbiased walk because alpha is 0")
+                else:
+                    # Biased random walk: transition probability is proportional to exp(alpha * Hy)
+                    print("Biased Random walk starts")
+
+                    # Compute and normalize probabilities
+                    weights = [child.accumulative_weight for child in current_transaction.children]
+                    probabilities = [np.exp(self.alpha_low * weight) for weight in weights]
+                    probabilities /= np.sum(probabilities)
+
+                    # Create a dictionary of child IDs and their corresponding probabilities
+                    prob_dict = {child.txid: prob for child, prob in zip(current_transaction.children, probabilities)}
+
+                    # Create a dictionary of child IDs and their corresponding probabilities and weights
+                    prob_and_weight_dict = {child.txid: {"prob": prob, "weight": weight} for child, prob, weight in
+                                            zip(current_transaction.children, probabilities, weights)}
+
+                    print(f"Probability and weight distribution: {prob_and_weight_dict}")
+                    self.logger.info(
+                        f"{datetime.now().strftime('%H:%M:%S.%f')} - For {self.node} Probability and weight distribution: {prob_and_weight_dict}")
+
+                current_transaction = np.random.choice(current_transaction.children, p=probabilities)
+                path.append(current_transaction) # Updating the path
+                print("Chosed the transaction", current_transaction.txid, "based of probabilty")
+                self.logger.info(f"{datetime.now().strftime('%H:%M:%S.%f')} - For {self.node}  Select Transaction {current_transaction.txid} bassed on probabilty {probabilities}")
+
+            reached_tips.append(current_transaction)
+            # Convert the list of Transaction objects into a list of their txids:
+            path_ids = [transaction.txid for transaction in path]
+            if current_transaction in tip_paths:
+                tip_paths[current_transaction.txid].append(path_ids)  # Add the path to the list of paths for this tip
+            else:
+                tip_paths[current_transaction.txid] = [path_ids]  # Initialize list of paths for this tip
+
+        reached_tips = list(set(reached_tips))  # Use a set to remove duplicates
+
+        # If fewer than two unique tips were reached, select additional tips randomly
+        while len(reached_tips) < 2:
+            print("Fewer than two unique tips were reached, selected tips randomly")
+            self.logger.info(f"{datetime.now().strftime('%H:%M:%S.%f')} - For {self.node} Fewer than two unique tips were reached, selected tips randomly")
+            #available_tips = [tx for tx in dag.tips if tx not in reached_tips]
+            available_tips = [tx for tx in prev_tips if tx not in reached_tips] #changed to previous tips
+            if not available_tips:
+                break   #return 1 tip just in case there is only one tip in the DAG
+            random_tip = random.choice(available_tips)
+            #reached_tips.append(random_tip)
+            path_to_tip = self.compute_path_to_tip_event(dag, random_tip, interval_transactions)
+            print("RANDOM REACHED TIP PATH",path_to_tip)
+            tip_paths[random_tip.txid] = [path_to_tip]
+            reached_tips.append(random_tip)
+
+        # Return the two transactions that reached the tip set first (we assume that "first" means smallest txid)
+        reached_tips.sort(key=lambda tx: tx.txid)
+        selected_tips = reached_tips[:2]
+        # Get the paths of the selected tips
+        selected_paths = [tip_paths[tip.txid] for tip in selected_tips]
+        print("Reached Tips", [tx.txid for tx in selected_tips])
+        reached_tips_str = ", ".join([tx.txid for tx in selected_tips])
+        self.logger.info(f"{datetime.now().strftime('%H:%M:%S.%f')} - Reached Tips: {reached_tips_str}")
+
+        # Print each path separately
+        for i, (tip, path) in enumerate(zip(selected_tips, selected_paths), start=1):
+            print(f"Path for Reached Tip {i} (Txid={tip.txid}):", path)
+            self.logger.info(f"{datetime.now().strftime('%H:%M:%S.%f')} - Path for Reached Tip {i} (Txid={tip.txid}): {str(path)}")
+
+        # return selected_tips, selected_paths
+        return selected_tips

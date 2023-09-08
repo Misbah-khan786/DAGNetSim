@@ -1,0 +1,56 @@
+Plotly Colorscale for AW.tx
+
+
+import pandas as pd
+import plotly.graph_objects as go
+import numpy as np
+
+# Reading the data from the file and extracting the accumulative weight
+accumulative_weights = []
+transaction_count = 0  # Counter for unique transaction identifiers
+
+with open("../AW.txt", 'r') as file:
+    for line in file:
+        if "Accumulative weight =" in line:
+            weight = int(line.split("Accumulative weight = ")[1].split(",")[0].strip())
+            transaction_count += 1
+            accumulative_weights.append(weight)
+
+# Constructing the unique transaction identifiers
+transaction_labels = [f"Transaction {i}" for i in range(1, transaction_count + 1)]
+
+# Creating a DataFrame for visualization
+df = pd.DataFrame({
+    'Transaction': transaction_labels,
+    'Accumulative Weight': accumulative_weights
+})
+
+# Sorting the dataframe by weight so that bars are ordered
+df = df.sort_values(by='Accumulative Weight', ascending=True)
+
+# Using logarithmic normalization for the color map
+log_norm = np.log(df['Accumulative Weight'])
+
+fig = go.Figure()
+
+fig.add_trace(go.Bar(
+    y=df['Transaction'],
+    x=df['Accumulative Weight'],
+    orientation='h',
+    marker=dict(
+        color=log_norm,
+        colorscale='Viridis',
+        colorbar=dict(title="Log of Accumulative Weight")
+    )
+))
+
+# Update layout for logarithmic x-axis and other aesthetics
+fig.update_layout(
+    xaxis_type="log",
+    xaxis_title="Accumulative Weight (Log Scale)",
+    yaxis_title="Transaction",
+    title='Accumulative Weights of Transactions'
+)
+
+fig.show()
+

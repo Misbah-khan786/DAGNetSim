@@ -1,0 +1,23 @@
+digraph {
+	overlap=false size="25, 25" splines=polyline
+	node [fixedsize=true height=0.3 width=0.3]
+	edge [len=2.0]
+	"Node 1" [label="Node 1" fontcolor=black fontsize=8 image="../Images/lptp_resized.png" shape=none]
+	"Node 2" [label="Node 2" fontcolor=black fontsize=8 image="../Images/lptp_resized.png" shape=none]
+	"Node 3" [label="Node 3" fontcolor=black fontsize=8 image="../Images/lptp_resized.png" shape=none]
+	Coordinator [label=Coordinator fontcolor=black fontsize=8 image="../Images/lptp_resized.png" shape=none]
+	"Node 1" [label="Node 1" image="../Images/lptp_resized.png" shape=none]
+	"Node 1" -> Coordinator [label=0.0093 arrowsize=0.5 fontsize=6]
+	"Node 1" -> "Node 3" [label=0.0064 arrowsize=0.5 fontsize=6]
+	"Node 2" [label="Node 2" image="../Images/lptp_resized.png" shape=none]
+	"Node 2" -> Coordinator [label=0.0046 arrowsize=0.5 fontsize=6]
+	"Node 2" -> "Node 3" [label=0.0119 arrowsize=0.5 fontsize=6]
+	"Node 3" [label="Node 3" image="../Images/lptp_resized.png" shape=none]
+	"Node 3" -> Coordinator [label=0.0059 arrowsize=0.5 fontsize=6]
+	"Node 3" -> "Node 1" [label=0.0064 arrowsize=0.5 fontsize=6]
+	"Node 3" -> "Node 2" [label=0.0119 arrowsize=0.5 fontsize=6]
+	Coordinator [label=Coordinator image="../Images/lptp_resized.png" shape=none]
+	Coordinator -> "Node 1" [label=0.0093 arrowsize=0.5 fontsize=6]
+	Coordinator -> "Node 2" [label=0.0046 arrowsize=0.5 fontsize=6]
+	Coordinator -> "Node 3" [label=0.0059 arrowsize=0.5 fontsize=6]
+}
