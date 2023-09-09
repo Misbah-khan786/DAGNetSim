@@ -62,8 +62,8 @@ class Node:
         # Configure the logger for the node
         log_file = f"logs/{self.name}.log"
         self.logger = setup_logger(self.name, log_file)
-        # self.logger.info("This is a test log message.")
-        # close_logger(self.logger)
+        self.logger.info("This is a test log message.")
+
 
         self.DIFFICULTY = 1
 
@@ -119,7 +119,7 @@ class Node:
         for parent in transaction.parent_txids:
             if parent in self.tips:
                 self.tips.remove(parent)
-                print(f"{parent} is no loger tip for {self.name}")
+                print(f"{parent} is no loger tip for {self.name} IN CREATING")
                 self.logger.info(f"{datetime.now().strftime('%H:%M:%S.%f')} - {parent} is no loger tip for {self.name}")
 
         return transaction
@@ -140,7 +140,6 @@ class Node:
         await peer.receive_transaction(transaction, self)
 
     async def receive_transaction(self, transaction, sender=None):
-
         # Check if the transaction has already been received
         if transaction.txid in self.seen_and_broadcasted_transactions:
             return
@@ -151,23 +150,24 @@ class Node:
         # Add the transaction to the list of unconfirmed transactions
         self.unconfirmed_transactions.append(transaction)
 
-        # The delay logic you had with time.sleep could be replaced with await asyncio.sleep(delay) if want to reintroduce it
+        # The delay logic  with time.sleep could be replaced with await asyncio.sleep(delay) if want to reintroduce it
 
         # # Validate the transaction
         # if not transaction.validate_transaction(DIFFICULTY=1):
         #     print(f"Invalid transaction {transaction.txid}")
         #     return
-
+        nodes_received_transactions_ids_b = [tx.txid for tx in self.nodes_received_transactions]
+        print(f"{self.name} recived transaction before appending the new transaction {nodes_received_transactions_ids_b}")
         async with self.lock:
             self.nodes_received_transactions.append(transaction)
-        nodes_received_transactions_ids= [tx.txid for tx in self.nodes_received_transactions]
-        print("TOTAL Recived TRASACTIONS SO  FAR BY NODE", self.name, nodes_received_transactions_ids)
-        self.logger.info(f"TOTAL RECIEVED TRASACTIONS SO FAR BY  NOD {self.name} are {len(self.nodes_received_transactions)}")
+            nodes_received_transactions_ids= [tx.txid for tx in self.nodes_received_transactions]
+            print("TOTAL Recived TRASACTIONS SO  FAR BY NODE", self.name, nodes_received_transactions_ids)
+            self.logger.info(f"TOTAL RECIEVED TRASACTIONS SO FAR BY  NOD {self.name} are {len(self.nodes_received_transactions)}")
         # self.transaction_timestamps[transaction.txid] = datetime.now()
         print(
             f"{datetime.now().strftime('%H:%M:%S.%f')} - {self.name} received Transaction ID {transaction.txid} from {sender.name}")
-        # self.logger.info(
-        #     f"{datetime.now().strftime('%H:%M:%S.%f')} - {self.name} received Transaction ID {transaction.txid} from {sender.name}")
+        self.logger.info(
+            f"{datetime.now().strftime('%H:%M:%S.%f')} - {self.name} received Transaction ID {transaction.txid} from {sender.name}")
 
         # If the transaction has no children, add it to the tips and if its a parent then remove it from tip list
         if not transaction.children and transaction not in self.tips:

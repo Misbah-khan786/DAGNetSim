@@ -26,16 +26,16 @@ class Network:
         # Generate delay matrix for the network
         self.generate_delay_matrix()
 
-    def transaction_received_by_all(self, transaction_id):
-        nodes_received_transaction = []
-        for node in self.nodes:
-            nodes_received_transaction.extend([(node.name, trans_id) for trans_id in node.nodes_received_transactions if
-                                               trans_id == transaction_id])
-
-        for node in self.nodes:
-            if node.name not in nodes_received_transaction and transaction_id in node.transaction_list:
-                return False
-        return True
+    # def transaction_received_by_all(self, transaction_id):
+    #     nodes_received_transaction = []
+    #     for node in self.nodes:
+    #         nodes_received_transaction.extend([(node.name, trans_id) for trans_id in node.nodes_received_transactions if
+    #                                            trans_id == transaction_id])
+    #
+    #     for node in self.nodes:
+    #         if node.name not in nodes_received_transaction and transaction_id in node.transaction_list:
+    #             return False
+    #     return True
 
     def get_last_receive_time(self, transaction_id):
         last_receive_time = None

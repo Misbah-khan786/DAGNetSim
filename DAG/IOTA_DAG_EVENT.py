@@ -139,13 +139,21 @@ class IOTA_DAG:
             #     f"{datetime.now().strftime('%H:%M:%S.%f')} -  {node.name} Started Generating the Transaction")
             new_transactions = []
             nodes_tips = list(node.tips)  # Create a copy of the tips
+            nodes_tip_ids = [tx.txid for tx in nodes_tips]
+            print(f"Tips of {node.name} are {nodes_tip_ids}")
             if not nodes_tips:
                 return
+            # if len(nodes_tips) >= 2:
+            #     tips = random.sample(nodes_tips, 2)
+            # else:
+            #     tips = nodes_tips
             # Instantiate the random walker
             random_walker = RandomWalker(W=3, N=2, alpha_low=0, alpha_high=0.0, node=node.name)
             new_transactions = []
             random_walk_tips = await random_walker.walk_event(self, nodes_tips)
             tips = random_walk_tips
+            tip_ids = [tx.txid for tx in tips]
+            print(f" Tips Returned by RANDOMWALK {tip_ids}")
             if not isinstance(tips, list):
                 tips = [tips]  # Convert to list if not a list
 
@@ -184,23 +192,28 @@ class IOTA_DAG:
 
         with time_block("Updating Tips and Graph"): #self.loggers[node.name]
             # tx.batch_num = self.batch_num
-            # for parent in tx.parent_transactions:
-            #     parent.children.append(tx)
-            #     if len(parent.children) == 1:
-            #         self.tips.append(parent)
+            for parent in tx.parent_transactions:
+                parent.children.append(tx)
+                if parent in node.tips:
+                    node.tips.remove(parent)
+                    # print(f"{parent} is no loger tip for {node.name} IN CREATING")
+                    # self.logger.info(
+                    #     f"{datetime.now().strftime('%H:%M:%S.%f')} - {parent} is no loger tip for {node.name}")
+                # # if len(parent.children) == 1:
+                #     node.tips.append(parent)
             node_graph = self.node_graphs[node.name]
             for parent in parent_txids:
                 node_graph.add_edge(parent, txid)
                 # self.graph.add_edge(parent, txid)
-                # self.draw(node)
+                self.draw(node)
 
 
 
             # self.tips = [tx for tx in self.tips + list(self.transactions.values()) if not tx.children]
             # self.batches.append(new_transactions)
             # self.batch_num += 1
-        # with time_block("Updating Weights"): # self.loggers[node.name], id=tx.txid
-        #     self.update_weights_topological_order(node)
+        with time_block("Updating Weights"): # self.loggers[node.name], id=tx.txid
+            self.update_weights_topological_order(node)
             # Update branch weights
             # with self.weight_lock:
             #     for tx in new_transactions:
@@ -223,61 +236,6 @@ class IOTA_DAG:
         #     f"{datetime.now().strftime('%H:%M:%S.%f')} - {node.name}: Added {tx} to DAG. ")
 
         # self.coordinator.cooridnator_view(tx)
-
-    def invoke_generate_milestone_after_delay(self):
-        while True:
-            current_time =datetime.now()
-            if (current_time - self.last_milestone_time).total_seconds() >= self.milestones_interval:
-                self.coordinator.generate_milestone(current_time)
-                self.last_milestone_time = datetime.now()
-
-            # time.sleep(self.milestones_interval)  # Adjustable time delay as needed
-            # self.coordinator.generate_milestone()
-
-    def update_weights_topological_order(self,node):
-        node_graph = self.node_graphs[node.name]
-        # Get a topological order of the transactions
-        order = list(nx.topological_sort(node_graph))
-        # order = list(nx.topological_sort(self.graph))
-
-        # Print the order
-        print("Topological order of transactions:", order)
-
-        print(f" SELF GENRATED TRANSACTIONS {len(node.transaction_list)}")
-        print(f" RECEIVED  TRANSACTIONS {len(node.nodes_received_transactions)}")
-
-        # transaction_list and nodes_received_transactions are attributes of 'node'.
-        all_transactions = node.transaction_list + node.nodes_received_transactions
-        transaction_ids = [tx.txid for tx in all_transactions]
-
-        print(f"THE LENGHT OF ALL TRANSACTIONS IN WEIGHT METHOD IS {len(all_transactions)}")
-        print("Start of weight-------", transaction_ids)
-
-        # Update the weights in this order
-        for txid in order:
-            tx = next((trans for trans in all_transactions if trans.txid == txid), None)
-            if tx:
-                updated_weight =tx.update_accumulative_weight()
-                print("Updated weight for tx", txid , updated_weight)
-
-        #
-        # # Update the weights in this order
-        # for txid in order:
-        #     tx = self.transactions[txid]
-        #     tx.update_accumulative_weight()
-
-    def print_weights(self, node):
-        print("\nUpdated accumulative weights and branch weights:")
-        all_transactions = node.transaction_list + node.nodes_received_transactions
-
-        for tx in all_transactions:
-            print(
-                f"Transaction {tx.txid}: Accumulative weight = {tx.accumulative_weight}, Branch weight = {tx.branch_weight}")
-        print("\n")
-        # for txid, tx in self.transactions.items():
-        #     print(
-        #         f"Transaction {txid}: Accumulative weight = {tx.accumulative_weight}, Branch weight = {tx.branch_weight}")
-        # print("\n")
 
     async def simulate_node(self, sim_time, node, network, start_time):
         current_time = time.time()
@@ -332,8 +290,72 @@ class IOTA_DAG:
         return transactions
 
 
+    def invoke_generate_milestone_after_delay(self):
+        while True:
+            current_time =datetime.now()
+            if (current_time - self.last_milestone_time).total_seconds() >= self.milestones_interval:
+                self.coordinator.generate_milestone(current_time)
+                self.last_milestone_time = datetime.now()
+
+            # time.sleep(self.milestones_interval)  # Adjustable time delay as needed
+            # self.coordinator.generate_milestone()
+
+    def update_weights_topological_order(self,node):
+        node_graph = self.node_graphs[node.name]
+        # Get a topological order of the transactions
+        order = list(nx.topological_sort(node_graph))
+        # order = list(nx.topological_sort(self.graph))
+
+        # Print the order
+        # print("Topological order of transactions:", order)
+        #
+        # print(f" SELF GENRATED TRANSACTIONS {len(node.transaction_list)}")
+        # print(f" RECEIVED  TRANSACTIONS {len(node.nodes_received_transactions)}")
+
+        # transaction_list and nodes_received_transactions are attributes of 'node'.
+        all_transactions = node.transaction_list + node.nodes_received_transactions
+        transaction_ids = [tx.txid for tx in all_transactions]
+
+        # print(f"THE LENGHT OF ALL TRANSACTIONS IN WEIGHT METHOD IS {len(all_transactions)}")
+        # print("Start of weight-------", transaction_ids)
+
+        # Update the weights in this order
+        for txid in order:
+            # print("Starting the weight update")
+            tx = next((trans for trans in all_transactions if trans.txid == txid), None)
+            # print(f"weight for tx")
+            if tx:
+                updated_weight =tx.update_accumulative_weight()
+                # print("Updated weight for tx", txid , updated_weight)
+
+        #
+        # # Update the weights in this order
+        # for txid in order:
+        #     tx = self.transactions[txid]
+        #     tx.update_accumulative_weight()
+
+    def print_weights(self, node):
+        print("\nUpdated accumulative weights and branch weights:")
+        all_transactions = node.transaction_list + node.nodes_received_transactions
+
+        for tx in all_transactions:
+            print(
+                f"Transaction {tx.txid}: Accumulative weight = {tx.accumulative_weight}, Branch weight = {tx.branch_weight}")
+        print("\n")
+        # for txid, tx in self.transactions.items():
+        #     print(
+        #         f"Transaction {txid}: Accumulative weight = {tx.accumulative_weight}, Branch weight = {tx.branch_weight}")
+        # print("\n")
+
+
     ###############################################
     def draw(self, node):
+
+        save_path = r'C:\Users\z5307913\Figures'
+
+        if not os.path.exists(save_path):
+            os.makedirs(save_path)
+
         # print(node.nodes_received_transactions)
         # print(node.transaction_list)
 
@@ -351,15 +373,15 @@ class IOTA_DAG:
         for tx in all_transactions:
 
             # Add transaction ID as a label
-            label = f"ID: {tx.txid}\nAW: {tx.accumulative_weight}"
+            label = f"{tx.txid}\nAW: {tx.accumulative_weight}"
             node_labels[tx.txid] = label
 
             # Determine the color of the node
-            if tx.txid == '1':  # assuming you have an `is_genesis` property
-                node_colors[tx.txid] = 'orange'  # Orange for genesis transaction
-                depth_map[tx.txid] = 1
+            if tx.txid == '0':  # assuming you have an `is_genesis` property
+                node_colors[tx.txid] = 'blue'  # Orange for genesis transaction
+                depth_map[tx.txid] = 0
 
-            elif tx in self.tips and tx.txid != "0":
+            elif tx in node.tips:
                 node_colors[tx.txid] = 'grey'  # grey for tips
                 depth_map[tx.txid] = max((depth_map[parent_txid] + 1 for parent_txid in tx.parent_txids),default= 0)
                 max_depth = max(max_depth, depth_map[tx.txid])
@@ -397,7 +419,7 @@ class IOTA_DAG:
 
         # Draw the graph
         plt.figure(figsize=(10, 5))
-        nx.draw(G, pos=pos, node_color=node_colors_list, node_size=1000, node_shape='s', edge_color=edge_colors)
+        nx.draw(G, pos=pos, node_color=node_colors_list, node_size=1300, node_shape='s', edge_color=edge_colors)
         nx.draw_networkx_labels(G, pos, labels=node_labels, font_size=8)
         plt.title(f'{node.name}')
         # plt.ylim(0, max(level_size for level_size in depth_map.values())) # Adjust ylim based on maximum level_size
@@ -405,6 +427,10 @@ class IOTA_DAG:
         plt.xlim(-1, max_depth + 2)
         #plt.savefig(f'Figures/my_plot_{self.current_batch}.png')
         plt.pause(1)
-        plt.show()
+        plt.savefig(os.path.join(save_path, f'my_plot_{node.name}.png'))
+        # plt.show()
+        plt.close()
+
+
 
 

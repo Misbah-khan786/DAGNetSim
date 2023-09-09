@@ -64,9 +64,13 @@ class Transaction:
 
     def update_accumulative_weight(self):
         self.accumulative_weight = self.weight
+        # print(f"Updating weight for transaction {self.txid} which has {len(self.children)} children.")
         for child in self.children:
+            # print(f"Child {child.txid} weight before update: {child.accumulative_weight}")
             child.update_accumulative_weight()
             self.accumulative_weight += child.accumulative_weight
+            # print(f"Child {child.txid} weight after update: {child.accumulative_weight}")
+
         return self.accumulative_weight
 
     def get_all_parents(self):

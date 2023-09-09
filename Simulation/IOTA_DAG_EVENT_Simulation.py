@@ -10,7 +10,7 @@ DIFFICULTY =1
 
 if __name__ == '__main__':
     print("Starting simulation...")
-    num_nodes = 3
+    num_nodes = 4
     # poisson_rate = 0.3
     milestones_interval = 0.5
     sim_time = 5 # Add the simulation_time
