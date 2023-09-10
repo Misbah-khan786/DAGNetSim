@@ -194,8 +194,8 @@ class IOTA_DAG:
             # tx.batch_num = self.batch_num
             for parent in tx.parent_transactions:
                 parent.children.append(tx)
-                if parent in node.tips:
-                    node.tips.remove(parent)
+                # if parent in node.tips:
+                #     node.tips.remove(parent)
                     # print(f"{parent} is no loger tip for {node.name} IN CREATING")
                     # self.logger.info(
                     #     f"{datetime.now().strftime('%H:%M:%S.%f')} - {parent} is no loger tip for {node.name}")
@@ -351,10 +351,15 @@ class IOTA_DAG:
     ###############################################
     def draw(self, node):
 
-        save_path = r'C:\Users\z5307913\Figures'
+        # save_path = r'C:\Users\z5307913\Figures'
 
-        if not os.path.exists(save_path):
-            os.makedirs(save_path)
+        if not os.path.exists('Figures'):
+            os.makedirs('Figures')
+
+        # Now, any file operations you do with the 'Figures' path will use this directory.
+
+        # if not os.path.exists(save_path):
+        #     os.makedirs(save_path)
 
         # print(node.nodes_received_transactions)
         # print(node.transaction_list)
@@ -381,14 +386,14 @@ class IOTA_DAG:
                 node_colors[tx.txid] = 'blue'  # Orange for genesis transaction
                 depth_map[tx.txid] = 0
 
-            elif tx in node.tips:
-                node_colors[tx.txid] = 'grey'  # grey for tips
-                depth_map[tx.txid] = max((depth_map[parent_txid] + 1 for parent_txid in tx.parent_txids),default= 0)
-                max_depth = max(max_depth, depth_map[tx.txid])
-            elif tx.is_confirmed:
-                node_colors[tx.txid] = 'green'  # green for confirmed transactions
-                depth_map[tx.txid] = max((depth_map[parent_txid] + 1 for parent_txid in tx.parent_txids), default=0)
-                max_depth = max(max_depth, depth_map[tx.txid])
+            # elif tx in node.tips:
+            #     node_colors[tx.txid] = 'grey'  # grey for tips
+            #     depth_map[tx.txid] = max((depth_map[parent_txid] + 1 for parent_txid in tx.parent_txids),default= 0)
+            #     max_depth = max(max_depth, depth_map[tx.txid])
+            # elif tx.is_confirmed:
+            #     node_colors[tx.txid] = 'green'  # green for confirmed transactions
+            #     depth_map[tx.txid] = max((depth_map[parent_txid] + 1 for parent_txid in tx.parent_txids), default=0)
+            #     max_depth = max(max_depth, depth_map[tx.txid])
             else:
                 node_colors[tx.txid] = 'blue'  # blue for other nodes
                 depth_map[tx.txid] = max((depth_map[parent_txid] + 1 for parent_txid in tx.parent_txids),default= 0)
@@ -425,10 +430,10 @@ class IOTA_DAG:
         # plt.ylim(0, max(level_size for level_size in depth_map.values())) # Adjust ylim based on maximum level_size
         plt.ylim(0, 1)  # Make sure all nodes fit in the figure
         plt.xlim(-1, max_depth + 2)
-        #plt.savefig(f'Figures/my_plot_{self.current_batch}.png')
         plt.pause(1)
-        plt.savefig(os.path.join(save_path, f'my_plot_{node.name}.png'))
-        # plt.show()
+        # plt.savefig(os.path.join(save_path, f'my_plot_{node.name}.png'))
+        plt.savefig(os.path.join('Figures', f'{node.name}.png'))
+        plt.show()
         plt.close()
 
 
