@@ -18,11 +18,11 @@ class RandomWalker:
         self.alpha_low = alpha_low
         self.alpha_high = alpha_high
         self.node= node
-        # self.logger = logging.getLogger(node)
+        self.logger = logging.getLogger(node)
 
     async def walk_event(self, dag, prev_tips):
         print(f" {self.node} TIP SELECTION STARTS")
-        # self.logger.info(f"{datetime.now().strftime('%H:%M:%S.%f')} - {self.node} STARTS RANDOM WALK")
+        self.logger.info(f"{datetime.now().strftime('%H:%M:%S.%f')} - {self.node} STARTS RANDOM WALK")
 
         # Get the current time
         current_time = datetime.now()
@@ -37,7 +37,7 @@ class RandomWalker:
         if current_time - dag.creation_time < timedelta(seconds=wd):
             wd = int((current_time - dag.creation_time).total_seconds())
             print(f"DAG is younger than {wd} seconds, adjusted [W,2W] to the DAG's age")
-            # self.logger.info(f"{datetime.now().strftime('%H:%M:%S.%f')} - For {self.node} : DAG is younger than {wd} seconds, adjusted [W,2W] to the DAG's age  ")
+            self.logger.info(f"{datetime.now().strftime('%H:%M:%S.%f')} - For {self.node} : DAG is younger than {wd} seconds, adjusted [W,2W] to the DAG's age  ")
 
         # Get the start and end times for the interval
         start_time = current_time - timedelta(seconds=wd)
@@ -50,7 +50,7 @@ class RandomWalker:
         print(f"Transactions from the past {w}-{wd} seconds:")
         # self.logger.info(f"{datetime.now().strftime('%H:%M:%S.%f')} -  For {self.node} Transactions from the past {w}-{wd} seconds:")
         print(', '.join("Txid=" + str(transaction.txid) for transaction in interval_transactions))
-        # self.logger.info(', '.join("Txid=" + str(transaction.txid) for transaction in interval_transactions))
+        self.logger.info(', '.join("Txid=" + str(transaction.txid) for transaction in interval_transactions))
 
         if len(interval_transactions) < self.N:
             start_transactions = interval_transactions
@@ -62,7 +62,7 @@ class RandomWalker:
             print(f"Randomly selected N={self.N} transactions from the interval:")
             # self.logger.info(f"{datetime.now().strftime('%H:%M:%S.%f')} -For {self.node}:Randomly selected N={self.N} transactions from the interval:")
             print(', '.join("Txid=" + str(transaction.txid) for transaction in start_transactions))
-            # self.logger.info(', '.join("Txid=" + str(transaction.txid) for transaction in start_transactions))
+            self.logger.info(', '.join("Txid=" + str(transaction.txid) for transaction in start_transactions))
 
         # Let the transactions perform independent random walks towards the tips
         reached_tips = []
@@ -84,8 +84,8 @@ class RandomWalker:
         # If fewer than two unique tips were reached, select additional tips randomly
         while len(reached_tips) < 2:
             print("Fewer than two unique tips were reached, selected tips randomly")
-            # self.logger.info(
-            #     f"{datetime.now().strftime('%H:%M:%S.%f')} - For {self.node} Fewer than two unique tips were reached, selected tips randomly")
+            self.logger.info(
+                f"{datetime.now().strftime('%H:%M:%S.%f')} - For {self.node} Fewer than two unique tips were reached, selected tips randomly")
             available_tips = [tx for tx in prev_tips if tx not in reached_tips]  # changed to previous tips
             if not available_tips:
                 break
@@ -102,12 +102,12 @@ class RandomWalker:
         selected_paths = [tip_paths[tip.txid] for tip in selected_tips]
         print("First 2 Reached Tips", [tx.txid for tx in selected_tips])
         reached_tips_str = ", ".join([tx.txid for tx in selected_tips])
-        # self.logger.info(f"{datetime.now().strftime('%H:%M:%S.%f')} - First 2 Reached Tips: {reached_tips_str}")
+        self.logger.info(f"{datetime.now().strftime('%H:%M:%S.%f')} - First 2 Reached Tips: {reached_tips_str}")
 
         # Print each path separately
         for i, (tip, path) in enumerate(zip(selected_tips, selected_paths), start=1):
             print(f"Path for Reached Tip {i} (Txid={tip.txid}):", path)
-            # self.logger.info(f"{datetime.now().strftime('%H:%M:%S.%f')} - Path for Reached Tip {i} (Txid={tip.txid}): {str(path)}")
+            self.logger.info(f"{datetime.now().strftime('%H:%M:%S.%f')} - Path for Reached Tip {i} (Txid={tip.txid}): {str(path)}")
 
         # return selected_tips, selected_paths
         return selected_tips
@@ -115,12 +115,12 @@ class RandomWalker:
     async def walk_from(self, start_transaction, reached_tips, tip_paths):
         print(
             f"{threading.current_thread().name} - Random walk loop started for transaction Txid= {start_transaction.txid}")
-        # self.logger.info(
-        #     f"{datetime.now().strftime('%H:%M:%S.%f')} - {threading.current_thread().name} - For {self.node} Random walk loop started for transaction Txid= {start_transaction.txid}")
+        self.logger.info(
+            f"{datetime.now().strftime('%H:%M:%S.%f')} - {threading.current_thread().name} - For {self.node} Random walk loop started for transaction Txid= {start_transaction.txid}")
         current_transaction = start_transaction
         print("current transaction is Txid", current_transaction.txid)
-        # self.logger.info(
-        #     f"{datetime.now().strftime('%H:%M:%S.%f')} - {threading.current_thread().name} For {self.node} current transaction is Txid = {current_transaction.txid} ")
+        self.logger.info(
+            f"{datetime.now().strftime('%H:%M:%S.%f')} - {threading.current_thread().name} For {self.node} current transaction is Txid = {current_transaction.txid} ")
         path = [start_transaction]
         while current_transaction.children:
             # print("while current transaction has childern or not reach to the tip")
@@ -152,15 +152,15 @@ class RandomWalker:
                                         zip(current_transaction.children, probabilities, weights)}
 
                 print(f"Probability and weight distribution: {prob_and_weight_dict}")
-                # self.logger.info(
-                #     f"{datetime.now().strftime('%H:%M:%S.%f')} - {threading.current_thread().name} For {self.node} Probability and weight distribution: {prob_and_weight_dict}")
+                self.logger.info(
+                    f"{datetime.now().strftime('%H:%M:%S.%f')} - {threading.current_thread().name} For {self.node} Probability and weight distribution: {prob_and_weight_dict}")
 
             current_transaction = np.random.choice(current_transaction.children, p=probabilities)
             path.append(current_transaction)  # Updating the path
             print(
                 f"{threading.current_thread().name} - Chose the transaction {current_transaction.txid} based on probability")
-            # self.logger.info(
-            #     f"{datetime.now().strftime('%H:%M:%S.%f')} - {threading.current_thread().name} - For {self.node}  Select Transaction {current_transaction.txid} based on probability {probabilities}")
+            self.logger.info(
+                f"{datetime.now().strftime('%H:%M:%S.%f')} - {threading.current_thread().name} - For {self.node}  Select Transaction {current_transaction.txid} based on probability {probabilities}")
 
         # This is a critical section, we must ensure that no two tasks modify these lists at the same time
         async with asyncio.Lock():

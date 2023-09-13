@@ -13,12 +13,12 @@ from DAG.dag import DAG
 # class Network, representing the whole network
 class Network:
     # Initialization function to set up a new Network
-    def __init__(self, num_nodes):
+    def __init__(self, num_nodes): #, log_queue
 
         # Generate the specified number of Nodes for the Network with different delay ranges
-        self.nodes = [Node(f"Node {i + 1}", self, delay_range=(2 + 0.5 * i, 4 + 0.5 * i)) for i in range(num_nodes)]
+        self.nodes = [Node(f"Node {i + 1}", self,  delay_range=(2 + 0.5 * i, 4 + 0.5 * i)) for i in range(num_nodes)] # log_queue,
         # adding coordinator to the network
-        self.coordinator = Coordinator("Coordinator", self, milestones_interval=150, is_coordinator=True)
+        self.coordinator = Coordinator("Coordinator", self,  milestones_interval=150, is_coordinator=True) #log_queue,
         self.nodes.append(self.coordinator)
         self.configure_nodes_with_coordinator(self.coordinator.coordinator_public_key)
         # Connect all the nodes in the Network to each other

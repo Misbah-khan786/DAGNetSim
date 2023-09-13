@@ -867,3 +867,142 @@ class Coordinator(Node):
 
         # return selected_tips, selected_paths
         return selected_tips
+
+
+        ##################################################################################
+
+        async def broadcast_transaction(self, transaction, sender=None):
+        if transaction.txid in self.seen_and_broadcasted_transactions:
+            return
+        threads = []
+        tasks = []
+        for peer in self.peers:
+            if peer == sender:
+                continue
+            delay = self.network.delay_matrix[(self, peer)]
+        #
+        #     # Broadcast the transaction and its approved parents
+        #     tasks.append(asyncio.create_task(self._send_transaction_to_peer(transaction, peer, delay)))
+        #     for approved_transaction in transaction.parent_transactions:
+        #         tasks.append(asyncio.create_task(self._send_transaction_to_peer(approved_transaction, peer, delay)))
+        #
+        # await asyncio.gather(*tasks)
+        if transaction.txid not in self.transaction_list:
+            thread = threading.Thread(target=peer.receive_transaction, args=(transaction, self, delay))
+            threads.append(thread)
+            thread.start()
+            # Wait for all threads to complete
+        for thread in threads:
+            thread.join()
+
+    async def _send_transaction_to_peer(self, transaction, peer, delay):
+        # await asyncio.sleep(delay)
+        await peer.receive_transaction(transaction, self)
+
+    async def receive_transaction(self, transaction, sender=None):
+        print("ENTERING IN THE RECEIVE")
+        # Check if the transaction has already been received
+        if transaction.txid in self.seen_and_broadcasted_transactions:
+            print("ALREADY SEEN")
+            return
+        if transaction in self.nodes_received_transactions:
+            print("ALREADY RECEIVEEd")
+            return
+        if transaction in self.transaction_list:
+            print("OWN TRANSACTION")
+            return
+
+        # First, check if we have the approved parents of this transaction
+        nodes_received_transactions_ids = {tx.txid for tx in self.nodes_received_transactions}
+        own_transactions_ids = {tx.txid for tx in self.transaction_list}
+        missing_parents = [t for t in transaction.parent_transactions if
+                           t.txid not in self.seen_and_broadcasted_transactions and t.txid
+                           not in nodes_received_transactions_ids and t.txid not in own_transactions_ids]
+
+        missing_parents_ids = [tx.txid for tx in missing_parents]
+        if missing_parents:
+            print("UNKNOWN PARENT", missing_parents_ids)
+            # Request the missing parent transactions
+            for parent_tx in missing_parents:
+                print("ASKING FOR MISSING PARENTS")
+                await self.request_parent_transaction(parent_tx.txid, sender)
+            # If there are missing parents, delay processing this transaction
+            # Store it in some buffer or queue for later processing
+            # When adding to pending
+            self.pending_transactions.append((transaction, datetime.now()))
+            print("ADDED TRANSACTION TO MISSING PARENT")
+            return
+
+     # The delay logic  with time.sleep could be replaced with await asyncio.sleep(delay) if want to reintroduce it
+
+        # # Validate the transaction
+        # if not transaction.validate_transaction(DIFFICULTY=1):
+        #     print(f"Invalid transaction {transaction.txid}")
+        #     return
+        nodes_received_transactions_ids_b = [tx.txid for tx in self.nodes_received_transactions]
+        print(f"{self.name} list of OWN TRANSACTIONS {self.transaction_list}")
+        print(
+            f"{self.name} list of received transaction before appending the new transaction {nodes_received_transactions_ids_b}")
+        async with self.lock:
+            self.nodes_received_transactions.append(transaction)
+            nodes_received_transactions_ids = [tx.txid for tx in self.nodes_received_transactions]
+            print("TOTAL Received TRANSACTIONS SO  FAR BY NODE", self.name, nodes_received_transactions_ids)
+        # self.transaction_timestamps[transaction.txid] = datetime.now()
+        print(
+            f"{datetime.now().strftime('%H:%M:%S.%f')} - {self.name} received Transaction ID {transaction.txid} from {sender.name}")
+
+        # If the transaction has no children, add it to the tips and if its a parent then remove it from tip list
+        if not transaction.children and transaction not in self.tips:
+            print(
+                f" Transaction ID : {transaction.txid} do not have children, that's why added to tip of {self.name}")
+
+        for parent in transaction.parent_transactions:
+            if parent in self.tips:
+                self.tips.remove(parent)
+                print(f" Transaction {parent.txid} is no longer a tip for {self.name}")
+
+
+        ip_ids = list(set([tip.txid for tip in self.tips]))
+        print(f"Tips of {self.name}, {ip_ids}")
+
+        # Forward the transaction
+        self.seen_and_broadcasted_transactions.add(transaction.txid)
+
+        # When checking pending transactions
+        for pending_tx, timestamp in list(self.pending_transactions):
+            if datetime.now() - timestamp > self.MAX_PENDING_DURATION:
+                self.pending_transactions.remove((pending_tx, timestamp))
+
+        # Forward the transaction to the peers of this node
+        await self.broadcast_transaction(transaction, sender)
+    async def process_pending_transactions(self):
+        while True:
+            successfully_processed = []
+            for transaction, timestamp in list(self.pending_transactions):
+                success = await self.receive_transaction(transaction)
+                if success:
+                    successfully_processed.append((transaction, timestamp))
+            # Remove processed transactions outside the loop
+            for transaction, timestamp in successfully_processed:
+                self.pending_transactions.remove((transaction, timestamp))
+            await asyncio.sleep(self.PENDING_CHECK_INTERVAL)
+
+    # Adding a method to request missing parent transactions
+    async def request_parent_transaction(self, missing_txid, sender):
+        if missing_txid not in self.seen_and_broadcasted_transactions:
+            # send a request to sender or all peers to provide the missing transaction
+            # for this example, let's just request it from the sender
+            await sender.provide_missing_transaction(missing_txid, self)
+
+    # The corresponding method to provide the missing transaction
+    async def provide_missing_transaction(self, txid, requester):
+        # search for the transaction in the node's database and send it to the requester
+        transaction = self.find_transaction_by_id(txid)
+        if transaction:
+            await self._send_transaction_to_peer(transaction, requester, 0)  # no delay in this case
+
+    def find_transaction_by_id(self, txid):
+        for transaction in self.nodes_received_transactions and self.transaction_list:
+            if transaction.txid == txid:
+                return transaction
+        return None

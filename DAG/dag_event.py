@@ -269,7 +269,7 @@ class DAG_Event:
             if tx.txid == "0":  # assuming you have an `is_genesis` property
                 node_colors[tx.txid] = 'orange'  # Orange for genesis transaction
                 depth_map[tx.txid] = 0
-            elif tx in self.tips and tx.txid is not "0":
+            elif tx in self.tips:
                 node_colors[tx.txid] = 'grey'  # Grey for tips
                 depth_map[tx.txid] = max((depth_map[parent_txid] + 1 for parent_txid in tx.parent_txids), default=0)
                 max_depth = max(max_depth, depth_map[tx.txid])

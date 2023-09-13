@@ -1,6 +1,7 @@
 import rsa
 import datetime
-from datetime import datetime
+from datetime import datetime, timedelta
+
 import time
 import os
 import simpy
@@ -10,30 +11,68 @@ import asyncio
 import threading
 import logging
 import hashlib
+from multiprocessing import Process, Queue
+import logging.handlers
+from multiprocessing import Manager
+
+import pickle
 
 
-def setup_logger(logger_name, log_file, level=logging.INFO):
-    # Create the logs_3 directory if it doesn't exist
-    if not os.path.exists('logs'):
-        os.makedirs('logs')
-    handler = logging.FileHandler(log_file, mode='w')
-    # Including time in the log messages
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
-    handler.setFormatter(formatter)
-    logger = logging.getLogger(logger_name)
-    logger.setLevel(level)
-    # Remove all handlers from the logger if it already exists and has handlers
-    if logger.hasHandlers():
-        logger.handlers.clear()
-    logger.addHandler(handler)
-    logger.debug('Logger setup successfully.')
-    return logger
+# def setup_logger(logger_name, log_file, log_queue, level=logging.INFO):
+#     ...
+#     logger = logging.getLogger(logger_name)
+#     logger.setLevel(level)
+#
+#     # Check and clear if logger already has handlers
+#     if logger.hasHandlers():
+#         logger.handlers.clear()
+#
+#     q_handler = logging.handlers.QueueHandler(log_queue)
+#     logger.addHandler(q_handler)
+#
+#     logger.debug('Logger setup successfully.')
+#     return logger
+#
+# handlers_dict = {}  # a dictionary to store handlers by logger name
+# def logger_listener_process(log_queue):
+#     while True:
+#         record = log_queue.get()
+#         if record is None:
+#             break
+#
+#         log_file = f"logs/{record.name}.log"
+#
+#         if record.name not in handlers_dict:
+#             try:
+#                 handler = logging.FileHandler(log_file, mode='w')  # using 'a' ensures log messages append to existing file if it's there
+#                 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+#                 handler.setFormatter(formatter)
+#                 logger = logging.getLogger(record.name)
+#                 logger.addHandler(handler)
+#                 logger.setLevel(logging.INFO)
+#                 handlers_dict[record.name] = handler
+#                 print(f"Setup handler for {record.name} and log file: {log_file}")
+#             except Exception as e:
+#                 print(f"Error setting up handler for {record.name}: {str(e)}")
+#
+#         try:
+#             logger = logging.getLogger(record.name)
+#             logger.handle(record)
+#             handlers_dict[record.name].flush()
+#             print(f"Handled log for {record.name} with message: {record.msg}")
+#         except Exception as e:
+#             print(f"Error handling log for {record.name}: {str(e)}")
+#
+#     for handler in handlers_dict.values():
+#         handler.close()
+#
+#     print("Listener ended.")
 
-#Define a class called Node, representing a participant in the network
+# a class  Node, representing a participant in the network
 class Node:
     # Initialization function to set up a new Node
-    def __init__(self, name, network, delay_range=(2, 7)): #is_coordinator=False
-
+    def __init__(self, name, network, delay_range=(2, 7)): #is_coordinator=False ##, log_queue
+        manager = Manager()
         self.network = network
         self.delay_range = delay_range
         # # The Node knows whether it's a coordinator
@@ -43,7 +82,7 @@ class Node:
         # Generate a pair of RSA keys for the Node, one public and one private
         (self.public_key, self.private_key) = rsa.newkeys(512)
         # Initialize an empty list to store the Node's transactions
-        self.transaction_list = []
+        self.transaction_list =manager.list()   #[]
         # Initialize an empty list to store the Node's unconfirmed/confirmed transactions
         self.unconfirmed_transactions = []
         self.confirmed_transactions = []
@@ -52,22 +91,29 @@ class Node:
         # Initialize an empty list to store the Node's milestones
         self.milestones = []
         self.genesis_milestone = None  # to recieve Gensis milestone by Nodes in Dag_Event class
-        self.nodes_received_transactions =[]
-        self.tips=[]
+        self.nodes_received_transactions = manager.list() #  []
+        self.tips=manager.list() # []
         self.broadcasted_transactions = []
         self.is_coordinator = False
         self.coordinator_public_key = None
         self.transaction_counter = 0
         self.seen_and_broadcasted_transactions = set()
         # Configure the logger for the node
-        log_file = f"logs/{self.name}.log"
-        self.logger = setup_logger(self.name, log_file)
-        self.logger.info("This is a test log message.")
-
-
+        # log_file = f"logs/{self.name}.log"
+        # self.logger = setup_logger(self.name, log_file, log_queue)
+        # self.logger.info("This is a test log message.")
         self.DIFFICULTY = 1
-
         self.lock = asyncio.Lock()
+        self.pending_transactions = []  # list of tuples to store pending transactions and their timestamp
+
+        self.MAX_PENDING_DURATION = timedelta(seconds=60)
+        self.PENDING_CHECK_INTERVAL = 10  # How often to check the pending transactions, in seconds
+
+        self.tips_lock = manager.Lock()
+        self.nodes_received_transactions_lock= manager.Lock()
+        self.transaction_list_lock = manager.Lock()
+
+
 
     def generate_id(self):
         self.transaction_counter += 1
@@ -106,92 +152,283 @@ class Node:
 
         self.transaction_list.append(transaction)
         print("TOTAL GENRATED TRASACTIONS SO FAR BY  NODE", self.name, len(self.transaction_list))
-        self.logger.info(f"TOTAL GENRATED TRASACTIONS SO FAR BY  NOD {self.name} are {len(self.transaction_list)}")
         print(f" {datetime.now().strftime('%H:%M:%S.%f')} - {self.name} GENRATED THE TRANSACT ID: {transaction.txid}")
-        self.logger.info(f"{datetime.now().strftime('%H:%M:%S.%f')} - {self.name} GENRATED THE TRANSACT ID: {transaction.txid}")
+        with self.tips_lock:
+            self.tips.append(transaction)
+            tip_ids = list(set([tip.txid for tip in self.tips]))  # Extract tip IDs
+            print(f"{self.name} added transaction{transaction.txid} to its tips:{tip_ids}")
 
-        self.tips.append(transaction)
-        tip_ids = list(set([tip.txid for tip in self.tips]))  # Extract tip IDs
-        print(f"{self.name} added transaction{transaction.txid} to its tips:{tip_ids}")
-        self.logger.info(f"{datetime.now().strftime('%H:%M:%S.%f')} - {self.name} added transaction{transaction.txid} to its tips:{tip_ids} ")
-
-        # If this transaction references any previous tips, remove them from the tips list
-        for parent in transaction.parent_txids:
-            if parent in self.tips:
-                self.tips.remove(parent)
-                print(f"{parent} is no loger tip for {self.name} IN CREATING")
-                self.logger.info(f"{datetime.now().strftime('%H:%M:%S.%f')} - {parent} is no loger tip for {self.name}")
-
+        # print(self.logger.__dict__)
         return transaction
 
     async def broadcast_transaction(self, transaction, sender=None):
         if transaction.txid in self.seen_and_broadcasted_transactions:
             return
+        threads = []
         tasks = []
         for peer in self.peers:
             if peer == sender:
                 continue
             delay = self.network.delay_matrix[(self, peer)]
+
+            # Broadcast the transaction and its approved parents
             tasks.append(asyncio.create_task(self._send_transaction_to_peer(transaction, peer, delay)))
+            for approved_transaction in transaction.parent_transactions:
+                tasks.append(asyncio.create_task(self._send_transaction_to_peer(approved_transaction, peer, delay)))
+
         await asyncio.gather(*tasks)
+
 
     async def _send_transaction_to_peer(self, transaction, peer, delay):
         # await asyncio.sleep(delay)
-        await peer.receive_transaction(transaction, self)
+        await peer.receive_transaction(transaction, delay, self)
 
-    async def receive_transaction(self, transaction, sender=None):
+    async def receive_transaction(self, transaction, delay, sender=None):
+        # print("ENTERING IN THE RECEIVE")
         # Check if the transaction has already been received
         if transaction.txid in self.seen_and_broadcasted_transactions:
+            # print("ALREADY SEEN")
             return
-        if transaction in self.nodes_received_transactions:
+        if transaction in list(self.nodes_received_transactions):
+            # print("ALREADY RECEIVEEd")
             return
-        if transaction in self.transaction_list:
+        if transaction in list(self.transaction_list):
+            # print("OWN TRANSACTION")
             return
-        # Add the transaction to the list of unconfirmed transactions
-        self.unconfirmed_transactions.append(transaction)
 
-        # The delay logic  with time.sleep could be replaced with await asyncio.sleep(delay) if want to reintroduce it
+        # First, check if we have the approved parents of this transaction
+        nodes_received_transactions_ids = {tx.txid for tx in self.nodes_received_transactions}
+        own_transactions_ids = {tx.txid for tx in self.transaction_list}
+        missing_parents = [t for t in transaction.parent_transactions if
+                           t.txid not in self.seen_and_broadcasted_transactions and t.txid
+                           not in nodes_received_transactions_ids and t.txid not in own_transactions_ids]
 
-        # # Validate the transaction
+        missing_parents_ids = [tx.txid for tx in missing_parents]
+        if missing_parents:
+            print("UNKNOWN PARENT", missing_parents_ids)
+            # Request the missing parent transactions
+            for parent_tx in missing_parents:
+                print("ASKING FOR MISSING PARENTS")
+                await self.request_parent_transaction(parent_tx.txid, sender)
+            # If there are missing parents, delay processing this transaction
+            # Store it in some buffer or queue for later processing
+            # When adding to pending
+            self.pending_transactions.append((transaction, datetime.now()))
+            print("ADDED TRANSACTION TO MISSING PARENT")
+            return
+
+     # The delay logic  with time.sleep could be replaced with await asyncio.sleep(delay) if want to reintroduce it
+
+        # Validate the transaction
         # if not transaction.validate_transaction(DIFFICULTY=1):
         #     print(f"Invalid transaction {transaction.txid}")
         #     return
         nodes_received_transactions_ids_b = [tx.txid for tx in self.nodes_received_transactions]
-        print(f"{self.name} recived transaction before appending the new transaction {nodes_received_transactions_ids_b}")
+        transaction_list_id = [tx.txid for tx in self.transaction_list]
+        print(f"{self.name} list of OWN TRANSACTIONS {transaction_list_id}")
+        print(
+            f"{self.name} list of received transaction before appending the new transaction {nodes_received_transactions_ids_b}")
         async with self.lock:
-            self.nodes_received_transactions.append(transaction)
-            nodes_received_transactions_ids= [tx.txid for tx in self.nodes_received_transactions]
-            print("TOTAL Recived TRASACTIONS SO  FAR BY NODE", self.name, nodes_received_transactions_ids)
-            self.logger.info(f"TOTAL RECIEVED TRASACTIONS SO FAR BY  NOD {self.name} are {len(self.nodes_received_transactions)}")
+            list(self.nodes_received_transactions).append(transaction)
+            nodes_received_transactions_ids = [tx.txid for tx in list(self.nodes_received_transactions)]
+            print("TOTAL Received TRANSACTIONS SO  FAR BY NODE", self.name, nodes_received_transactions_ids)
         # self.transaction_timestamps[transaction.txid] = datetime.now()
         print(
-            f"{datetime.now().strftime('%H:%M:%S.%f')} - {self.name} received Transaction ID {transaction.txid} from {sender.name}")
-        self.logger.info(
-            f"{datetime.now().strftime('%H:%M:%S.%f')} - {self.name} received Transaction ID {transaction.txid} from {sender.name}")
+            f"{datetime.now().strftime('%H:%M:%S.%f')} - {self.name} received Transaction ID {transaction.txid} from {sender.name} with delay {delay}")
+
 
         # If the transaction has no children, add it to the tips and if its a parent then remove it from tip list
-        if not transaction.children and transaction not in self.tips:
-            print(
-                f" Transaction ID : {transaction.txid} do not have children, that's why added to tip of {self.name}")
-            # self.logger.info(
-            #     f"{datetime.now().strftime('%H:%M:%S.%f')} - Transaction ID : {transaction.txid} do not have children, that's why added to tip of {self.name} ")
+        if not transaction.children and transaction not in list(self.tips):
+            print(f" Transaction ID : {transaction.txid} do not have children, that's why added to tip of {self.name}")
             self.tips.append(transaction)
         for parent in transaction.parent_transactions:
-            if parent in self.tips:
-                self.tips.remove(parent)
+            if parent in list(self.tips):
+                list(self.tips).remove(parent)
                 print(f" Transaction {parent.txid} is no longer a tip for {self.name}")
-                # self.logger.info(
-                #     f"{datetime.now().strftime('%H:%M:%S.%f')} - Transaction {parent.txid} is no longer a tip for {self.name} ")
 
-        ip_ids = list(set([tip.txid for tip in self.tips]))
+        ip_ids = list(set([tip.txid for tip in list(self.tips)]))
         print(f"Tips of {self.name}, {ip_ids}")
-        # self.logger.info(f"{datetime.now().strftime('%H:%M:%S.%f')} - Tips of {self.name}, {ip_ids} ")
+
 
         # Forward the transaction
         self.seen_and_broadcasted_transactions.add(transaction.txid)
 
+        # When checking pending transactions
+        for pending_tx, timestamp in list(self.pending_transactions):
+            if datetime.now() - timestamp > self.MAX_PENDING_DURATION:
+                self.pending_transactions.remove((pending_tx, timestamp))
+
         # Forward the transaction to the peers of this node
         await self.broadcast_transaction(transaction, sender)
+    async def process_pending_transactions(self):
+        while True:
+            successfully_processed = []
+            for transaction, timestamp in list(self.pending_transactions):
+                success = await self.receive_transaction(transaction)
+                if success:
+                    successfully_processed.append((transaction, timestamp))
+            # Remove processed transactions outside the loop
+            for transaction, timestamp in successfully_processed:
+                self.pending_transactions.remove((transaction, timestamp))
+            await asyncio.sleep(self.PENDING_CHECK_INTERVAL)
+
+    # Adding a method to request missing parent transactions
+    async def request_parent_transaction(self, missing_txid, sender):
+        if missing_txid not in self.seen_and_broadcasted_transactions:
+            # send a request to sender or all peers to provide the missing transaction
+            # for this example, let's just request it from the sender
+            await sender.provide_missing_transaction(missing_txid, self)
+
+    # The corresponding method to provide the missing transaction
+    async def provide_missing_transaction(self, txid, requester):
+        # search for the transaction in the node's database and send it to the requester
+        transaction = self.find_transaction_by_id(txid)
+        if transaction:
+            await self._send_transaction_to_peer(transaction, requester, 0)  # no delay in this case
+
+    def find_transaction_by_id(self, txid):
+        for transaction in self.nodes_received_transactions and self.transaction_list:
+            if transaction.txid == txid:
+                return transaction
+        return None
+    #
+    # def broadcast_transaction(self, transaction, sender=None):
+    #     pickle.dumps(transaction)
+    #     if transaction.txid in self.seen_and_broadcasted_transactions:
+    #         return
+    #     threads = []
+    #     tasks = []
+    #     for peer in self.peers:
+    #         if peer == sender:
+    #             continue
+    #         delay = self.network.delay_matrix[(self, peer)]
+    #         peer.receive_transaction(transaction, delay, self)
+    #         # #added threading
+    #         # if transaction.txid not in self.transaction_list:
+    #         #     thread = threading.Thread(target=peer.receive_transaction, args=(transaction, delay, self))
+    #         #     threads.append(thread)
+    #         #     thread.start()
+    #         #     # Wait for all threads to complete
+    #         # for thread in threads:
+    #         #     thread.join()
+    #     #
+    #     #     # Broadcast the transaction and its approved parents
+    #     #     tasks.append(asyncio.create_task(self._send_transaction_to_peer(transaction, peer, delay)))
+    #     #     for approved_transaction in transaction.parent_transactions:
+    #     #         tasks.append(asyncio.create_task(self._send_transaction_to_peer(approved_transaction, peer, delay)))
+    #     #
+    #     # await asyncio.gather(*tasks)
+    #
+    #
+    # # async def _send_transaction_to_peer(self, transaction, peer, delay):
+    # #     # await asyncio.sleep(delay)
+    # #     await peer.receive_transaction(transaction, self)
+    #
+    # def receive_transaction(self, transaction, delay, sender ): #
+    #     print("ENTERING IN THE RECEIVE")
+    #     # Check if the transaction has already been received
+    #     if transaction.txid in self.seen_and_broadcasted_transactions:
+    #         print("ALREADY SEEN")
+    #         return
+    #     if transaction in self.nodes_received_transactions:
+    #         print("ALREADY RECEIVEEd")
+    #         return
+    #     if transaction in self.transaction_list:
+    #         print("OWN TRANSACTION")
+    #         return
+    #
+    #     # First, check if we have the approved parents of this transaction
+    #     nodes_received_transactions_ids = {tx.txid for tx in self.nodes_received_transactions}
+    #     own_transactions_ids = {tx.txid for tx in self.transaction_list}
+    #     missing_parents = [t for t in transaction.parent_transactions if
+    #                        t.txid not in self.seen_and_broadcasted_transactions and t.txid
+    #                        not in nodes_received_transactions_ids and t.txid not in own_transactions_ids]
+    #
+    #     missing_parents_ids = [tx.txid for tx in missing_parents]
+    #     if missing_parents:
+    #         print("UNKNOWN PARENT", missing_parents_ids)
+    #         # Request the missing parent transactions
+    #         for parent_tx in missing_parents:
+    #             print("ASKING FOR MISSING PARENTS")
+    #             self.request_parent_transaction(parent_tx.txid, sender)
+    #         # If there are missing parents, delay processing this transaction
+    #         # Store it in some buffer or queue for later processing
+    #         # When adding to pending
+    #         self.pending_transactions.append((transaction, datetime.now()))
+    #         print("ADDED TRANSACTION TO MISSING PARENT")
+    #         return
+    #
+    #  # The delay logic  with time.sleep could be replaced with await asyncio.sleep(delay) if want to reintroduce it
+    #
+    #
+    #     # # Validate the transaction
+    #     # if not transaction.validate_transaction(DIFFICULTY=1):
+    #     #     print(f"Invalid transaction {transaction.txid}")
+    #     #     return
+    #     nodes_received_transactions_ids_b = [tx.txid for tx in self.nodes_received_transactions]
+    #     transaction_list_id = [tx.txid for tx in self.transaction_list]
+    #     print(f"{self.name} list of OWN TRANSACTIONS {transaction_list_id}")
+    #     print(f"{self.name} list of received transaction before appending the new transaction {nodes_received_transactions_ids_b}")
+    #
+    #     self.nodes_received_transactions.append(transaction)
+    #     nodes_received_transactions_ids = [tx.txid for tx in self.nodes_received_transactions]
+    #     print("TOTAL Received TRANSACTIONS SO  FAR BY NODE", self.name, nodes_received_transactions_ids)
+    # # self.transaction_timestamps[transaction.txid] = datetime.now()
+    #     print(f"{datetime.now().strftime('%H:%M:%S.%f')} - {self.name} received Transaction ID {transaction.txid} from {sender.name} with delay {delay}")
+    #     # If the transaction has no children, add it to the tips and if its a parent then remove it from tip list
+    #     if not transaction.children and transaction not in self.tips:
+    #         print(
+    #             f" Transaction ID : {transaction.txid} do not have children, that's why added to tip of {self.name}")
+    #         self.tips.append(transaction)
+    #     for parent in transaction.parent_transactions:
+    #         if parent in self.tips:
+    #             self.tips.remove(parent)
+    #             print(f" Transaction {parent.txid} is no longer a tip for {self.name}")
+    #
+    #     ip_ids = list(set([tip.txid for tip in self.tips]))
+    #     print(f"Tips of {self.name}, {ip_ids}")
+    #
+    #     # Forward the transaction
+    #     self.seen_and_broadcasted_transactions.add(transaction.txid)
+    #
+    #     # When checking pending transactions
+    #     for pending_tx, timestamp in list(self.pending_transactions):
+    #         if datetime.now() - timestamp > self.MAX_PENDING_DURATION:
+    #             self.pending_transactions.remove((pending_tx, timestamp))
+    #
+    #     # Forward the transaction to the peers of this node
+    #     self.broadcast_transaction(transaction, sender)
+    # def process_pending_transactions(self):
+    #     while True:
+    #         successfully_processed = []
+    #         for transaction, timestamp in list(self.pending_transactions):
+    #             success =  self.receive_transaction(transaction)
+    #             if success:
+    #                 successfully_processed.append((transaction, timestamp))
+    #         # Remove processed transactions outside the loop
+    #         for transaction, timestamp in successfully_processed:
+    #             self.pending_transactions.remove((transaction, timestamp))
+    #             time.sleep(self.PENDING_CHECK_INTERVAL)
+    #
+    # # Adding a method to request missing parent transactions
+    # def request_parent_transaction(self, missing_txid, sender):
+    #     if missing_txid not in self.seen_and_broadcasted_transactions:
+    #         # send a request to sender or all peers to provide the missing transaction
+    #         # for this example, let's just request it from the sender
+    #         sender.provide_missing_transaction(missing_txid, self)
+    #
+    # # The corresponding method to provide the missing transaction
+    # def provide_missing_transaction(self, txid, requester):
+    #     # search for the transaction in the node's database and send it to the requester
+    #     transaction = self.find_transaction_by_id(txid)
+    #     if transaction:
+    #          self._send_transaction_to_peer(transaction, requester, 0)  # no delay in this case
+    #
+    # def find_transaction_by_id(self, txid):
+    #     for transaction in self.nodes_received_transactions and self.transaction_list:
+    #         if transaction.txid == txid:
+    #             return transaction
+    #     return None
 
     def is_double_spent(self, transaction):
         # Check if the transaction spends from an address that has already been spent
@@ -286,8 +523,8 @@ class Node:
             return False
 
 class Coordinator(Node):
-    def __init__(self, name, network, milestones_interval, is_coordinator=False):
-        super().__init__(name, network)
+    def __init__(self, name, network, milestones_interval, is_coordinator=False):  # log_queue,
+        super().__init__(name, network) #, log_queue
         self.milestones_interval = milestones_interval
         self.milestones = []
         self.transaction_list = []
@@ -297,8 +534,8 @@ class Coordinator(Node):
         # Generate RSA key pair for the Coordinator
         self.coordinator_public_key, self.coordinator_private_key = rsa.newkeys(512)
         self.is_coordinator = is_coordinator  # Override the attribute
-        log_file = f"logs/{self.name}.log"
-        self.logger = setup_logger(self.name, log_file)
+        # log_file = f"logs/{self.name}.log"
+        # self.logger = setup_logger(self.name, log_file, log_queue)
         self.last_milestone_time = datetime.fromtimestamp(time.time())
 
     def cooridnator_view(self, transaction):
@@ -384,11 +621,11 @@ class Coordinator(Node):
         if isinstance(milestone, Transaction):  # If milestone is a Transaction object (genesis milestone)
             print(
                 f"Genesis milestone (ID: {milestone.txid}) has been broadcasted by coordinator to all peers and validated by {valid_count} out of {len(self.peers)} peers.")
-            self.logger.info(f"Genesis milestone (ID: {milestone.txid}) has been broadcasted by coordinator to all peers and validated by {valid_count} out of {len(self.peers)} peers.")
+            # self.logger.info(f"Genesis milestone (ID: {milestone.txid}) has been broadcasted by coordinator to all peers and validated by {valid_count} out of {len(self.peers)} peers.")
         elif isinstance(milestone, dict):  # If milestone is a dictionary (regular milestone)
             print(
                 f"Milestone {milestone['index']} has been broadcasted by coordinator to all peers and validated by {valid_count} out of {len(self.peers)} peers.")
-            self.logger.info( f"Milestone {milestone['index']} has been broadcasted by coordinator to all peers and validated by {valid_count} out of {len(self.peers)} peers.")
+            # self.logger.info( f"Milestone {milestone['index']} has been broadcasted by coordinator to all peers and validated by {valid_count} out of {len(self.peers)} peers.")
 
     def get_recent_transactions(self, current_time):
         # current_time_str = datetime.now().strftime('%H:%M:%S.%f')
