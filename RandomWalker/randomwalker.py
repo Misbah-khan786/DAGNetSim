@@ -28,7 +28,7 @@ class RandomWalker:
         current_time = datetime.now()
 
         # Define the interval (W to WD seconds)
-        w = 30# Start of interval, in seconds
+        w = 60# Start of interval, in seconds
         wd = w * 2  # End of interval, in seconds
         # for tx in dag.transactions.values():
         #     print(f" Transaction {tx.txid} was  created at {tx.timestamp} with parent {tx.parent_txids} .")

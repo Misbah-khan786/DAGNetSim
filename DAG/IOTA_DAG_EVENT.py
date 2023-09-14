@@ -17,7 +17,12 @@ import uuid
 import time
 from contextlib import contextmanager
 import traceback
-
+import pandas as pd
+import numpy as np
+import matplotlib
+matplotlib.use('TkAgg')
+TIMING_DICT = {}
+random_walk_times = []
 # Top-level
 # def run_simulation(sim_time, node, network, start_time, poisson_rate, milestones_interval):
 #     # Create a new loop for this process
@@ -45,10 +50,10 @@ def run_simulation(sim_time, node, network, start_time, poisson_rate, milestones
                                      poisson_rate=poisson_rate)
         result = loop.run_until_complete(iota_dag_instance.simulate_node(sim_time, node, network, start_time))
     except Exception as e:
-        # print(f"Error during simulation for node {node.name}: {e}")
-        error_msg = f"Error during simulation for node {node.name}: {e}\n"
-        error_msg += traceback.format_exc()
-        print(error_msg)
+        print(f"Error during simulation for node {node.name}: {e}")
+        # error_msg = f"Error during simulation for node {node.name}: {e}\n"
+        # error_msg += traceback.format_exc()
+        # print(error_msg)
         result = []
     finally:
         # Ensure all other tasks are finished before closing the loop
@@ -67,12 +72,33 @@ def run_simulation(sim_time, node, network, start_time, poisson_rate, milestones
 
 
 @contextmanager
-def time_block(label, logger=None, id=None):
+def time_block(label, logger=None, id=None, node_name=None):
     start_time = time.perf_counter()
     yield
     end_time = time.perf_counter()
     duration = end_time - start_time
-    message = f"{label} took {duration:0.4f} seconds."
+    # Add node_name to the message if provided
+    node_info = f" (Node: {node_name})" if node_name else ""
+    message = f"{label}{node_info} took {duration:0.4f} seconds."
+    # message = f"{label} took {duration:0.4f} seconds."
+    if label == "Random walk tip selction":
+        random_walk_times.append(duration)
+        print(f"Added duration: {duration}. Total durations now: {len(random_walk_times)}")
+
+    # Storing the data in the global TIMING_DICT
+    if node_name not in TIMING_DICT:
+        TIMING_DICT[node_name] = {}
+    TIMING_DICT[node_name][label] = TIMING_DICT[node_name].get(label, []) + [duration]
+
+    # Ensure directory exists, otherwise create it
+    dir_name = "timings_dir"
+    if not os.path.exists(dir_name):
+        os.makedirs(dir_name)
+
+    # Write the duration to a file inside the directory
+    with open(os.path.join(dir_name, "timings.txt"), "a") as file:
+        file.write(message + "\n")
+
     if id:
         logger.info(f"for ID {id} {message} ")
     elif logger:
@@ -88,10 +114,6 @@ class IOTA_DAG:
         self.tips = []
         self.graph = nx.DiGraph()
         self.node_graphs = {node.name: nx.DiGraph() for node in network.nodes}
-        self.batch_num = 0  # initialize batch number
-        self.batches = []  # list of batches
-        self.num_batches = 0  # store the number of batches
-        self.current_batch = 0  # store the current batch number
         self.coordinator = None
         self.milestones_interval = milestones_interval
         self.last_milestone_time = datetime.now()
@@ -100,6 +122,8 @@ class IOTA_DAG:
         self.print_lock = threading.Lock()  # assuming print_lock is a threading.Lock() object
         self.loggers = {node.name: logging.getLogger(node.name) for node in network.nodes}
         self.total_transactions_by_node = 0
+        self.weights_printed = {node.name: False for node in network.nodes}
+        self.transaction_count = 0
 
     def get_transaction_by_id(self, node, txid):
         """Retrieve transaction by ID from a node's context."""
@@ -115,29 +139,29 @@ class IOTA_DAG:
         total = list(tans)+list(trans)
         print(f" Recieved {trans_ids},Total {len(total)}, Genrated {tans_ids},  ")
         start_time = datetime.now()
-        with time_block("Initial Setup for Random walk tip selction"):# self.loggers[node.name
+        with time_block("Random walk tip selction ", node_name=node.name ):# self.loggers[node.name
             print(f"{node.name} Started Generating the Transaction")
             new_transactions = []
             nodes_tips = list(node.tips)  # Create a copy of the tips
             nodes_tip_ids = [tx.txid for tx in nodes_tips]
-            print(f"Tips of {node.name} are {nodes_tip_ids} in ADD TRANSACTION")
+            print(f"Tipssssssssssss of {node.name} are {nodes_tip_ids} in ADD TRANSACTION")
             if not nodes_tips:
                 return
-            if len(nodes_tips) >= 2:
-                tips = random.sample(nodes_tips, 2)
-            else:
-                tips = nodes_tips
-            # Instantiate the random walker
-            # random_walker = RandomWalker(W=3, N=2, alpha_low=0, alpha_high=0.0, node=node.name)
-            # new_transactions = []
-            # random_walk_tips = await random_walker.walk_event(self, nodes_tips)
-            # tips = random_walk_tips
+            # if len(nodes_tips) >= 2:
+            #     tips = random.sample(nodes_tips, 2)
+            # else:
+            #     tips = nodes_tips
+            # #Instantiate the random walker
+            random_walker = RandomWalker(W=3, N=2, alpha_low=0, alpha_high=0.0, node=node.name)
+            new_transactions = []
+            random_walk_tips = await random_walker.walk_event(self, nodes_tips)
+            tips = random_walk_tips
             tip_ids = [tx.txid for tx in tips]
             print(f" Tips Returned by RANDOMWALK {tip_ids}")
             if not isinstance(tips, list):
                 tips = [tips]  # Convert to list if not a list
 
-        with time_block("Parent Transaction Validation", self.loggers[node.name]):
+        with time_block("Parent Transaction Validation",  node_name=node.name):
             valid = True
             for parent in tips:
                 if parent.txid == "0":  # Skip the genesis transaction
@@ -149,7 +173,7 @@ class IOTA_DAG:
                     break
                 if valid:
                     print("Parent transaction(s) have valid signatures. No double spending detected.")
-        with time_block("Transaction Creation and appending"): #  self.loggers[node.name]
+        with time_block("Transaction Creation and appending", node_name=node.name): #  self.loggers[node.name]
 
             txid = node.generate_id()
             parent_txids = list(set(parent.txid for parent in tips))
@@ -159,13 +183,13 @@ class IOTA_DAG:
             # self.transactions[txid] = tx
             new_transactions.append(tx)
 
-        with time_block("Updating Tips and Graph"): #self.loggers[node.name]
+        with time_block("Updating Tips and Graph", node_name=node.name): #self.loggers[node.name]
             # tx.batch_num = self.batch_num
             for parent in tx.parent_transactions:
                 parent.children.append(tx)
-                if parent in node.tips:
-                    node.tips.remove(parent)
-                # # if len(parent.children) == 1:
+                # if parent in node.tips:
+                #     node.tips.remove(parent)
+                # if len(parent.children) == 1:
                 #     node.tips.append(parent)
             node_graph = self.node_graphs[node.name]
             for parent in parent_txids:
@@ -176,7 +200,7 @@ class IOTA_DAG:
             # self.tips = [tx for tx in self.tips + list(self.transactions.values()) if not tx.children]
             # self.batches.append(new_transactions)
             # self.batch_num += 1
-        with time_block("Updating Weights"): # self.loggers[node.name], id=tx.txid
+        with time_block("Updating Weights", node_name=node.name): # self.loggers[node.name], id=tx.txid
             self.update_weights_topological_order(node)
             # Update branch weights
             # with self.weight_lock:
@@ -200,6 +224,7 @@ class IOTA_DAG:
             f"{datetime.now().strftime('%H:%M:%S.%f')} - {node.name}: Added {tx} to DAG. ")
 
         # self.coordinator.cooridnator_view(tx)
+        self.transaction_count += 1
 
     async def simulate_node(self, sim_time, node, network, start_time):
         current_time = time.time()
@@ -224,6 +249,12 @@ class IOTA_DAG:
 
             # Update current time
             current_time = time.time()
+        # if not self.weights_printed[node.name]:
+        #     df = self.get_weights(node)
+        #     self.print_weights(node)
+        #     self.plot_weights_graph(df, node)
+        #     self.plot_durations()
+        #     self.weights_printed[node.name] = True
 
         return transactions
 
@@ -242,15 +273,13 @@ class IOTA_DAG:
 
         transactions = [tx for sublist in results for tx in sublist]
 
+
         # for node in network.nodes:
-        #     self.draw(node)
         #     self.print_weights(node)
-
-
+        #     self.draw(node)
         # Transactions per second in Tangle
-        transactions_per_second = len(transactions) / sim_time
-        print(f"Transactions per second: {transactions_per_second}")
-
+        # transactions_per_second = len(transactions) / sim_time
+        # print(f"Transactions per second: {transactions_per_second}")
         return transactions
 
 
@@ -353,6 +382,7 @@ class IOTA_DAG:
         #     tx.update_accumulative_weight()
 
     def print_weights(self, node):
+        df = self.get_weights(node)
         print("\nUpdated accumulative weights and branch weights:", node.name)
         # all_transactions = node.transaction_list + node.nodes_received_transactions
         all_transactions = list(node.transaction_list) + list(node.nodes_received_transactions)
@@ -366,8 +396,69 @@ class IOTA_DAG:
         #     print(
         #         f"Transaction {txid}: Accumulative weight = {tx.accumulative_weight}, Branch weight = {tx.branch_weight}")
         # print("\n")
+        return df
 
+    def get_weights(self, node):
+        data = {
+            'Transaction': [],
+            'Accumulative Weight': [],
+            'Branch Weight': []
+        }
 
+        all_transactions = list(node.transaction_list) + list(node.nodes_received_transactions)
+        for tx in all_transactions:
+            data['Transaction'].append(tx.txid)
+            data['Accumulative Weight'].append(tx.accumulative_weight)
+            data['Branch Weight'].append(tx.branch_weight)
+
+        return pd.DataFrame(data)
+
+    def plot_weights_graph(self, df,node):
+        y = np.arange(len(df['Transaction']))
+        x = df['Accumulative Weight'].values
+        norm = plt.Normalize(np.log(x.min()), np.log(x.max()))
+        colors = plt.cm.viridis(norm(np.log(x)))
+        sm = plt.cm.ScalarMappable(cmap="viridis", norm=norm)
+        sm.set_array([])
+
+        fig, ax = plt.subplots(figsize=(10, 15))
+        ax.barh(y, x, color=colors)
+        ax.invert_yaxis()  # Invert the y-axis
+        n = 10
+        ax.set_yticks(y[::n])
+        ax.set_yticklabels(df['Transaction'].iloc[::n])
+        ax.set_xscale("log")
+        ax.get_xaxis().set_major_formatter(plt.FuncFormatter(lambda x, loc: "{:,}".format(int(x))))
+
+        ax.set_xlabel('Accumulative Weight (Log Scale)')
+        ax.set_title(f'Accumulative Weights of Transactions for Node {node.name}')
+        plt.colorbar(sm, ax=ax, orientation="vertical", label="Log of Accumulative Weight")
+        plt.show(block=True)
+
+    def plot_durations(self):
+        for node, timings in TIMING_DICT.items():
+            for label, durations in timings.items():
+                plt.plot(range(1, len(durations) + 1), durations, label=label)
+
+            plt.title(f"Timings for Node: {node}")
+            plt.xlabel('Transaction Count')
+            plt.ylabel('Duration (seconds)')
+            plt.legend()
+            plt.show(block=True)
+
+    def plot_random_walk_times(self):
+        print(f"Attempting to plot {len(random_walk_times)} values.")
+        plt.figure(figsize=(10, 6))
+
+        x_values = list(range(1, self.transaction_count + 1))
+        y_values = random_walk_times
+        plt.plot(x_values, y_values, marker='o', linestyle='-')
+        plt.xlabel('Transaction Count')
+        plt.ylabel('Random Walk Time (seconds)')
+        plt.title('Random Walk Time vs Transaction Count')
+        plt.grid(True)
+
+        plt.show(block=True)
     ###############################################
     def draw(self, node):
 

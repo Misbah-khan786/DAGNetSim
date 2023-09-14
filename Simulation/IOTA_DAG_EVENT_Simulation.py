@@ -25,7 +25,7 @@ if __name__ == '__main__':
     num_nodes =5
     # poisson_rate = 0.3
     milestones_interval = 0.5
-    sim_time = 5 # Add the simulation_time
+    sim_time = 1 # Add the simulation_time
     # Create the network
     # network = Network(num_nodes, log_queue)
     print("Node/Network setup starting ")
