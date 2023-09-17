@@ -80,7 +80,7 @@ class Node:
         # Generate a pair of RSA keys for the Node, one public and one private
         (self.public_key, self.private_key) = rsa.newkeys(512)
         # Initialize an empty list to store the Node's transactions
-        self.transaction_list =  [] #[]manager.list()
+        self.transaction_list = manager.list()  #[]manager.list()
         # Initialize an empty list to store the Node's unconfirmed/confirmed transactions
         self.unconfirmed_transactions = []
         self.confirmed_transactions = []
@@ -89,8 +89,8 @@ class Node:
         # Initialize an empty list to store the Node's milestones
         self.milestones = []
         self.genesis_milestone = None  # to recieve Gensis milestone by Nodes in Dag_Event class
-        self.nodes_received_transactions =  [] #[] manager.list()
-        self.tips=  []  # []manager.list()
+        self.nodes_received_transactions = manager.list()  #[] manager.list()
+        self.tips=  manager.list() # []manager.list()
         self.broadcasted_transactions = []
         self.is_coordinator = False
         self.coordinator_public_key = None
@@ -119,7 +119,8 @@ class Node:
 
     def create_and_sign_transaction(self, txid, parent_txids, DIFFICULTY):
         # Generate a random data string
-        data = os.urandom(500000)  # generates 500,000 bytes = 0.5 MB
+        # data = os.urandom(500000)  # generates 500,000 bytes = 0.5 MB
+        data = os.urandom(1024)  # generates 1024 bytes = 1 KB = 0.001 MB
         data = data.decode('latin1')  # decode bytes to string using 'latin1' encoding
 
         # Create a new Transaction object
@@ -221,15 +222,15 @@ class Node:
         # if not transaction.validate_transaction(DIFFICULTY=1):
         #     print(f"Invalid transaction {transaction.txid}")
         #     return
-        nodes_received_transactions_ids_b = [tx.txid for tx in self.nodes_received_transactions]
+        nodes_received_transactions_ids_b =[tx.txid for tx in self.nodes_received_transactions]
         transaction_list_id = [tx.txid for tx in self.transaction_list]
         print(f"{self.name} list of OWN TRANSACTIONS {transaction_list_id}")
         print(
-            f"{self.name} list of received transaction before appending the new transaction {nodes_received_transactions_ids_b}")
+            f"{self.name} list of received transaction before appending the new transaction {list(set(nodes_received_transactions_ids_b))}")
         # async with self.lock:
         self.nodes_received_transactions.append(transaction)
         nodes_received_transactions_ids = [tx.txid for tx in self.nodes_received_transactions]
-        print("TOTAL Received TRANSACTIONS SO  FAR BY NODE", self.name, nodes_received_transactions_ids)
+        print("TOTAL Received TRANSACTIONS SO  FAR BY NODE", self.name, list(set(nodes_received_transactions_ids)))
         # self.transaction_timestamps[transaction.txid] = datetime.now()
         print(f"{datetime.now().strftime('%H:%M:%S.%f')} - {self.name} received Transaction ID {transaction.txid} from {sender.name} with delay {delay}")
         # If the transaction has no children, add it to the tips and if its a parent then remove it from tip list

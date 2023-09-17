@@ -1006,3 +1006,59 @@ class Coordinator(Node):
             if transaction.txid == txid:
                 return transaction
         return None
+
+        #################################################################################
+        #
+# def read_file(file_path):
+#     """Read and return the content of the given file."""
+#     with open(file_path, 'r') as f:
+#         return f.read()
+#
+# def extract_durations(log_content, action, node):
+#     """Extract durations for the specified action and node from the log content."""
+#     lines = log_content.strip().split("\n")
+#     durations = []
+#     for line in lines:
+#         if action in line and node in line:
+#             try:
+#                 duration = float(line.split("took")[1].split("seconds")[0].strip())
+#                 durations.append(duration)
+#             except ValueError as e:
+#                 print(f"Error parsing line: {line}")
+#     return durations
+#
+# def plot_durations(durations, node_name):
+#     """Plot the given durations."""
+#
+#     # Generate x-values
+#     x = list(range(1, len(durations) + 1))
+#     y = durations
+#
+#     # Create the plot
+#     plt.figure(figsize=(10, 6))
+#     plt.plot(x, y, '-o', color='royalblue', markersize=4, linewidth=2)
+#
+#     # Smoothing the line to make it look like a wave (optional)
+#     degree = 5
+#     coeffs = np.polyfit(x, y, degree)
+#     p = np.poly1d(coeffs)
+#     y_smooth = p(x)
+#     plt.plot(x, y_smooth, '-g', linewidth=2)
+#
+#     # Adding labels and title
+#     plt.xlabel('Transaction Count')
+#     plt.ylabel('Duration (Seconds)')
+#     plt.title(f'Duration for {node_name}')
+#
+#     # Display the plot
+#     plt.grid(True)
+#     plt.tight_layout()
+#     plt.show()
+#
+# def main():
+#     log_content = read_file('timings_dir/timings.txt')
+#     node_durations = extract_durations(log_content, "Random walk tip selction", "(Node: Node 95)")
+#     plot_durations(node_durations, "Random Walk for Node 95")
+#
+# if __name__ == "__main__":
+#     main()

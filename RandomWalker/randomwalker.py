@@ -28,7 +28,7 @@ class RandomWalker:
         current_time = datetime.now()
 
         # Define the interval (W to WD seconds)
-        w = 60# Start of interval, in seconds
+        w = 30# Start of interval, in seconds
         wd = w * 2  # End of interval, in seconds
         # for tx in dag.transactions.values():
         #     print(f" Transaction {tx.txid} was  created at {tx.timestamp} with parent {tx.parent_txids} .")
@@ -44,8 +44,10 @@ class RandomWalker:
         end_time = current_time - timedelta(seconds=w)
 
         # Get all transactions that happened within the interval
-        interval_transactions = [tx for tx in dag.transactions.values() if start_time <= tx.timestamp <= end_time]
-
+        # for tx in prev_tips:
+        #     print(f" time stap of {tx.txid} is {tx.timestamp}")
+        interval_transactions = [tx for tx in prev_tips if start_time <= tx.timestamp <= end_time]
+        # print("Interval Transactions", interval_transactions)
 
         print(f"Transactions from the past {w}-{wd} seconds:")
         # self.logger.info(f"{datetime.now().strftime('%H:%M:%S.%f')} -  For {self.node} Transactions from the past {w}-{wd} seconds:")

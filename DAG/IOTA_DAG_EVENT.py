@@ -152,7 +152,7 @@ class IOTA_DAG:
             # else:
             #     tips = nodes_tips
             # #Instantiate the random walker
-            random_walker = RandomWalker(W=3, N=2, alpha_low=0, alpha_high=0.0, node=node.name)
+            random_walker = RandomWalker(W=3, N=2, alpha_low=0.001, alpha_high=0.0, node=node.name)
             new_transactions = []
             random_walk_tips = await random_walker.walk_event(self, nodes_tips)
             tips = random_walk_tips
@@ -233,20 +233,15 @@ class IOTA_DAG:
 
         while current_time - start_time < sim_time * 60:  # Convert minutes to seconds
             tx = await self.add_transactions(node, network)
-
             # Add new transaction to list
             # if tx and tx.parent_txids:
             #     transactions.append(tx)
-
             # Update branch weights for all transactions
             transaction_values = list(self.transactions.values())  # Create a list of values
-
             # Get delay for the next transaction when all node have different poisson rate
             delay = random.expovariate(node_poisson_rate)
-
             # Use async sleep now
             await asyncio.sleep(delay)
-
             # Update current time
             current_time = time.time()
         # if not self.weights_printed[node.name]:
