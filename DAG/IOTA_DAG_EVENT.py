@@ -277,7 +277,6 @@ class IOTA_DAG:
         # print(f"Transactions per second: {transactions_per_second}")
         return transactions
 
-
     def coordinator_genesis_milestone(self):
         # Generate a random data string
         data = os.urandom(500000)  # generates 500,000 bytes = 0.5 MB

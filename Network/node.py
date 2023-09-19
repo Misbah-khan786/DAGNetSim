@@ -16,8 +16,8 @@ import logging.handlers
 from multiprocessing import Manager
 
 import pickle
-
-
+import random
+import numpy as np
 # def setup_logger(logger_name, log_file, log_queue, level=logging.INFO):
 #     ...
 #     logger = logging.getLogger(logger_name)
@@ -80,7 +80,7 @@ class Node:
         # Generate a pair of RSA keys for the Node, one public and one private
         (self.public_key, self.private_key) = rsa.newkeys(512)
         # Initialize an empty list to store the Node's transactions
-        self.transaction_list = manager.list()  #[]manager.list()
+        self.transaction_list = [] #manager.list()
         # Initialize an empty list to store the Node's unconfirmed/confirmed transactions
         self.unconfirmed_transactions = []
         self.confirmed_transactions = []
@@ -89,8 +89,8 @@ class Node:
         # Initialize an empty list to store the Node's milestones
         self.milestones = []
         self.genesis_milestone = None  # to recieve Gensis milestone by Nodes in Dag_Event class
-        self.nodes_received_transactions = manager.list()  #[] manager.list()
-        self.tips=  manager.list() # []manager.list()
+        self.nodes_received_transactions = [] #manager.list()
+        self.tips=  []#manager.list()
         self.broadcasted_transactions = []
         self.is_coordinator = False
         self.coordinator_public_key = None
@@ -111,7 +111,22 @@ class Node:
         self.nodes_received_transactions_lock= manager.Lock()
         self.transaction_list_lock = manager.Lock()
 
+        ##########################
+        self.queue = []
+        self.tx_rate = random.randint(1, 5)
 
+    def generate_transaction(self, network):
+        transaction = (self.name, network.time)  # (node_id, timestamp)
+        # Draw a sample from Poisson distribution to get the number of transactions for this node at this time step
+        num_transactions = np.random.poisson(self.tx_rate)
+        for _ in range(num_transactions):
+            transaction = (self.name, network.time)  # (node_id, timestamp)
+            print(
+                f"Node {self.name} generated a transaction at time {network.time} "
+                f"for peers {network.peers[self.name]}")
+        for peer in network.peers[self.name]:
+            delay = network.delay_matrix[self.name][peer]
+            network.add_transaction_to_future(transaction, peer, delay)
 
     def generate_id(self):
         self.transaction_counter += 1

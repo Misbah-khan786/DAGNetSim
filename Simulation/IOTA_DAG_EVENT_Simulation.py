@@ -22,14 +22,14 @@ if __name__ == '__main__':
     # print("Listener process started.")
 
     print("Starting simulation...")
-    num_nodes = 6
+    num_nodes =4
     # poisson_rate = 0.3
     milestones_interval = 0.5
     sim_time = 30 # Add the simulation_time
     # Create the network
     # network = Network(num_nodes, log_queue)
     print("Node/Network setup starting ")
-    network = Network(num_nodes)
+    network = Network(num_nodes, 0.05)
     print("Node/Network setup done")
     # Nodes without coordinator
     nodes_without_coordinator = [node for node in network.nodes if not isinstance(node, Coordinator)]

@@ -13,19 +13,34 @@ from DAG.dag import DAG
 # class Network, representing the whole network
 class Network:
     # Initialization function to set up a new Network
-    def __init__(self, num_nodes): #, log_queue
+    def __init__(self, num_nodes,p, delay_range=(0.05, 0.5)): #, log_queue
 
-        # Generate the specified number of Nodes for the Network with different delay ranges
-        self.nodes = [Node(f"Node {i + 1}", self,  delay_range=(2 + 0.5 * i, 4 + 0.5 * i)) for i in range(num_nodes)] # log_queue,
-        # adding coordinator to the network
-        self.coordinator = Coordinator("Coordinator", self,  milestones_interval=150, is_coordinator=True) #log_queue,
-        self.nodes.append(self.coordinator)
-        self.configure_nodes_with_coordinator(self.coordinator.coordinator_public_key)
-        # Connect all the nodes in the Network to each other
-        self.create_peers()
-        # Generate delay matrix for the network
-        self.generate_delay_matrix()
+        # # Generate the specified number of Nodes for the Network with different delay ranges
+        # self.nodes = [Node(f"Node {i + 1}", self,  delay_range=(2 + 0.5 * i, 4 + 0.5 * i)) for i in range(num_nodes)] # log_queue,
+        # # adding coordinator to the network
+        # self.coordinator = Coordinator("Coordinator", self,  milestones_interval=150, is_coordinator=True) #log_queue,
+        # self.nodes.append(self.coordinator)
+        # self.configure_nodes_with_coordinator(self.coordinator.coordinator_public_key)
+        # # Connect all the nodes in the Network to each other
+        # self.create_peers()
+        # # Generate delay matrix for the network
+        # self.generate_delay_matrix()
 
+        ##################################
+        self.N = num_nodes
+        print("Initializing nodes...")
+        self.nodes = [Node(i,self) for i in range(self.N)]
+        print("Nodes initialized.")
+
+        print("Generating peers...")
+        self.peers = self.generate_peers(p)
+        print("Peers generated.")
+
+        print("Assigning delays...")
+        self.delay_matrix = self.assign_delays(delay_range)
+        print("Delays assigned.")
+        self.future_transactions = {}
+        self.time = 0
     # def transaction_received_by_all(self, transaction_id):
     #     nodes_received_transaction = []
     #     for node in self.nodes:
@@ -76,7 +91,61 @@ class Network:
                     node.peers.append(peer)
                     if node not in peer.peers:  # To avoid Duplicates
                         peer.peers.append(node)
+##########################################################################
+    def generate_peers(self, p):
+        peers = {}
+        for i in range(self.N):
+            peers[i] = [j for j in range(self.N) if i != j and random.random() < p]
+            print(f"Node {i} has peers: {peers[i]}")
+        return peers
 
+    def assign_delays(self, delay_range):
+        delay_matrix = {}
+        for i in range(len(self.nodes)):
+            delay_matrix[i] = {}
+            for j in self.peers[i]:
+                delay_matrix[i][j] = random.uniform(*delay_range)
+        return delay_matrix
+
+    def add_transaction_to_future(self, transaction, node_id, delay):
+        time_to_execute = self.time + delay
+        print(f"Adding transaction {transaction} for node {node_id} to be delivered at time {time_to_execute}")
+        if time_to_execute not in self.future_transactions:
+            self.future_transactions[time_to_execute] = []
+        self.future_transactions[time_to_execute].append((transaction, node_id))
+
+    def simulate_second(self):
+        # Generate transactions for each node
+        print("Generating transactions for each node...")
+        for node in self.nodes:
+            node.generate_transaction(self)
+        print("Transactions generated.")
+
+        # Move time forward
+        self.time += 1
+
+        # Deliver transactions
+        print(f"Checking for transactions to deliver at time {self.time}")
+
+        # Use a loop to continuously check for transactions to be delivered during this second
+        while True:
+            # Find transactions that are set to be delivered within the current second
+            deliverable_transactions = [(t, v) for t, v in self.future_transactions.items() if t < self.time]
+
+            # Exit loop if there are no transactions to deliver
+            if not deliverable_transactions:
+                break
+
+            # Process each deliverable transaction
+            for delivery_time, transactions in deliverable_transactions:
+                for transaction, node_id in transactions:
+                    print(f"Delivering transaction {transaction} to node {node_id} at time {self.time}")
+                    self.nodes[node_id].queue.append(transaction)
+
+                # Once the transactions for this delivery_time have been processed, remove them from future_transactions
+                del self.future_transactions[delivery_time]
+
+    ###############################################################################
     def generate_delay_matrix(self):
         self.delay_matrix = {}
         # For each pair of Nodes in the Network...

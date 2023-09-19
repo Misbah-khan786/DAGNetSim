@@ -161,7 +161,7 @@ Parent Transaction Validation (Node: Node 2) took 0.0002 seconds.
 Transaction Creation and appending (Node: Node 2) took 0.0018 seconds.
 Updating Tips and Graph (Node: Node 2) took 0.0000 seconds.
 Updating Weights (Node: Node 2) took 0.0001 seconds.
-Random walk tip selction  (Node: Node 4) took 0.0009 seconds.
+Random walk tip selction  (Node: Node 4) took 0.0007 seconds.
 Parent Transaction Validation (Node: Node 4) took 0.0003 seconds.
 Parent Transaction Validation (Node: Node 2) took 0.0002 seconds.
 Transaction Creation and appending (Node: Node 4) took 0.0015 seconds.
