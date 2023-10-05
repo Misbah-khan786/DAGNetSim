@@ -1,62 +1,81 @@
 import numpy as np
 from scipy.stats import poisson, kstest
 from Network.network import Network
+from Network.observer import Observer
 import matplotlib.pyplot as plt
-def simulate(N, p, duration):
+def simulate(N, p, duration, observation_times):
     print("Initializing network...")
     network = Network(N, p)
+    observer = Observer(network)
+    # observation_times = observer.generate_observation_times(end_time=60, num_observations=3)
+    print(observation_times)
     print("Network initialized.")
+
     for _ in range(duration):
         print(f"Simulating second {_}...")
         network.simulate_second()
+        if _ in observation_times:
+            print("GOING IN OBSERVER")
+            observer.observe_nodes([_])  # observe at this second
+            # observer.analyse_transactions()
+            # observer.analyse_tips()
+            # print(f"Time: {_}, {observer.assess_node_convergence(_)}")
         print(f"Finished simulating second {_}.")
     # Count transactions for each node
     transaction_counts = [len(node.queue) for node in network.nodes]
 
-    # Return transaction counts for analysis
-    return transaction_counts
+    return transaction_counts, network, observer
 if __name__ == '__main__':
 
     print("Starting simulation...")
-    transaction_counts = simulate(10, 0.5, 60)
+    # Generate observation times once
+    observer_dummy = Observer(None)  # Temp observer to generate observation times
+    observation_times = [round(time) for time in observer_dummy.generate_observation_times(end_time=3600, num_observations=10)]
+    print(observation_times)
+    transaction_counts, network, observer  = simulate(5, 0.4, 3600, observation_times)
     mean_transactions = np.mean(transaction_counts)
     print("Mean Transactions",mean_transactions)
-    expected_distribution = [poisson.pmf(i, mean_transactions) for i in range(max(transaction_counts) + 1)]
-    print("Expected distribution", expected_distribution)
+    # expected_distribution = [poisson.pmf(i, mean_transactions) for i in range(max(transaction_counts) + 1)]
+    # # print("Expected distribution", expected_distribution)
+    # for node_id_to_visualize in range(10):
+    #     network.plot_inter_arrival_histogram(node_id_to_visualize, 3600)
+   # # Print the combined generation rate and average delays AFTER the graph
+   #  print("\nCombined Generation Rates for Each Node:")
+   #  network.print_combined_generation_rate()
+   #  print("\nAverage Delays for Each Node:")
+   #  network.print_average_delays()
+   #  print("\nTransactions for Each Node:")
+   #  network.print_all_node_transactions()
 
-    # Calculate mean
-    lambda_value = np.mean(transaction_counts)
+    # Observer
 
-    # Expected Poisson distribution
-    expected_distribution = [poisson.pmf(i, lambda_value) for i in range(max(transaction_counts) + 1)]
+    # observer = Observer(network)
 
-    # Plot actual distribution
-    plt.hist(transaction_counts, bins=range(0, max(transaction_counts) + 2), density=True, alpha=0.5, label="Observed")
+    # # uniform or exponential
+    # observation_times = observer.generate_observation_times(end_time=600, distribution='uniform')
+    # # For fixed intervals of 15 minutes:
+    # observation_times = observer.generate_observation_times(end_time=3600, interval=900)
+    # For 20 random observations within the hour:
+    # observation_times = observer.generate_observation_times(end_time=60, num_observations=3)
+    # print(observation_times)
+    #
+    # observer.observe_nodes(observation_times)
+    # print(observer.node_observations.keys())
+    # print(observer.node_observations)
+    # observer.analyse_transactions()
+    # print("Transaction Analysis:", observer.transaction_analysis)
+    # observer.analyse_tips()
+    # print("Tips Analysis:", observer.tips_analysis)  # Debugging output
+    # print(observer.transaction_analysis.keys())
+    # print(observer.tips_analysis.keys())
 
-    # Plot expected Poisson distribution
-    plt.plot(range(max(transaction_counts) + 1), expected_distribution, 'o-', label="Expected (Poisson)")
+    for time in observation_times:
+        print(f"Time: {time}, {observer.assess_node_convergence(time)}")
+    # observer.document_tips()
 
-    plt.xlabel("Transaction Counts")
-    plt.ylabel("Probability")
-    plt.legend()
-    plt.show(block=True)
+    # # Call other observer methods as needed
+    # observer.analyse_tip_convergence()
 
-    # Kolmogorov-Smirnov test
-    observed_cdf = np.cumsum(
-        np.histogram(transaction_counts, bins=range(0, max(transaction_counts) + 2), density=True)[0])
-    expected_cdf = np.cumsum(expected_distribution)
-    statistic, p_value = kstest(observed_cdf, expected_cdf)
 
-    print(f"KS Statistic: {statistic}")
-    print(f"P-value: {p_value}")
 
-    if p_value > 0.05:
-        print("The observed distribution is not significantly different from the expected Poisson distribution.")
-    else:
-        print("The observed distribution is significantly different from the expected Poisson distribution.")
-
-    # Descriptive Statistics
-    mean = np.mean(transaction_counts)
-    median = np.median(transaction_counts)
-    variance = np.var(transaction_counts)
 

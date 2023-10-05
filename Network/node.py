@@ -80,7 +80,7 @@ class Node:
         # Generate a pair of RSA keys for the Node, one public and one private
         (self.public_key, self.private_key) = rsa.newkeys(512)
         # Initialize an empty list to store the Node's transactions
-        self.transaction_list = [] #manager.list()
+        self.transaction_list = manager.list() #
         # Initialize an empty list to store the Node's unconfirmed/confirmed transactions
         self.unconfirmed_transactions = []
         self.confirmed_transactions = []
@@ -89,8 +89,8 @@ class Node:
         # Initialize an empty list to store the Node's milestones
         self.milestones = []
         self.genesis_milestone = None  # to recieve Gensis milestone by Nodes in Dag_Event class
-        self.nodes_received_transactions = [] #manager.list()
-        self.tips=  []#manager.list()
+        self.nodes_received_transactions =manager.list()#manager.list()
+        self.tips=  manager.list()#
         self.broadcasted_transactions = []
         self.is_coordinator = False
         self.coordinator_public_key = None
@@ -113,25 +113,79 @@ class Node:
 
         ##########################
         self.queue = []
-        self.tx_rate = random.randint(1, 5)
-
+        self.tx_rate = random.uniform(0.01, 0.1)
+        self.transaction_count = 0
+        self.generated_transactions = []
+        self.transaction_history = []  # For historical data
+        self.current_transactions = 0  # For the current second
+        self.parent_map = {'genesis': False}  # Dictionary to keep track of which transactions are parents
+        self.tips = ['genesis']  # List to keep track of tips, initialized with the genesis transaction
     def generate_transaction(self, network):
-        transaction = (self.name, network.time)  # (node_id, timestamp)
         # Draw a sample from Poisson distribution to get the number of transactions for this node at this time step
         num_transactions = np.random.poisson(self.tx_rate)
         for _ in range(num_transactions):
-            transaction = (self.name, network.time)  # (node_id, timestamp)
-            print(
-                f"Node {self.name} generated a transaction at time {network.time} "
-                f"for peers {network.peers[self.name]}")
-        for peer in network.peers[self.name]:
-            delay = network.delay_matrix[self.name][peer]
-            network.add_transaction_to_future(transaction, peer, delay)
+            self.transaction_count += 1
+            txid = f"Node {self.name}-{self.transaction_count}"
+            print(f"Node {self.name} has available tips: {self.tips}")
+            # transaction = (txid, network.time)  # (node_id, timestamp)
+            # Select parents from transactions which are not yet parents (i.e., they are tips)
+            possible_parents = [tx for tx, is_parent in self.parent_map.items() if not is_parent]
+            num_parents = min(2, len(possible_parents))
+            parents = random.sample(possible_parents, num_parents) if num_parents > 0 else ['genesis']
+            print(f"Node {self.name} selected parents: {parents} for transaction {txid} ")
 
+            transaction = (txid, network.time, parents)  # (node_id, timestamp, [parent_ids])
+
+            # Update the parent_map and tips
+            self.update_parent_map_and_tips(txid, parents)
+            # Append the generated transaction ID to the list of generated transactions
+            self.generated_transactions.append(txid)
+            print(
+                f"Node {self.name} generated a transaction {transaction}at time {network.time} "
+                f"for peers {network.peers[self.name]}")
+            for peer in network.peers[self.name]:
+                delay = network.delay_matrix[self.name][peer]
+                network.add_transaction_to_future(transaction, peer, delay)
+
+    def add_transaction(self, transaction):
+        txid, _, parents = transaction  # Unpack transaction to get txid and parents
+        self.queue.append(transaction)
+        self.current_transactions += 1
+        # Update the parent_map and tips for the received transaction
+        self.update_parent_map_and_tips(txid, parents)
+
+    def update_parent_map_and_tips(self, txid, parents):
+        # Mark the selected parents as parents in parent_map
+        for parent in parents:
+            self.parent_map[parent] = True
+
+        # Update the tips list
+        old_tips = self.tips.copy()
+        self.tips = [tip for tip in self.tips if tip not in parents]  # Remove parents from tips
+        self.tips.append(txid)  # Add the new transaction to tips
+
+        # Also, add the new transaction to the parent_map with is_parent as False
+        self.parent_map[txid] = False
+        print(f"Node {self.name} removed {parents} from tips.")
+        print(f"Node {self.name} added {txid} to tips.")
+        print(f"Node {self.name} updated tips: {self.tips} from old tips: {old_tips}")
+    def transactions_received(self):
+        return len(self.queue)
     def generate_id(self):
         self.transaction_counter += 1
         return f"{self.name}-{self.transaction_counter:01}"
+    def update_history(self):
+        self.transaction_history.append(self.current_transactions)
+        self.current_transactions = 0
 
+    def print_transactions(self):
+        Total_gen = len(self.generated_transactions)
+        Total_rec = len(self.queue)
+        print(f"Node {self.name} has Generated (Total:{Total_gen}) the following transactions:")
+        print(self.generated_transactions)  # Print the generated transactions
+        print(f"Node {self.name} has Received (Total:{Total_rec}) the following transactions:")
+        print(self.queue)
+        ########################################
     def create_and_sign_transaction(self, txid, parent_txids, DIFFICULTY):
         # Generate a random data string
         # data = os.urandom(500000)  # generates 500,000 bytes = 0.5 MB

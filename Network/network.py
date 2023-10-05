@@ -1,4 +1,5 @@
 
+import matplotlib.pyplot as plt
 from Network.node import Node, Coordinator
 from datetime import datetime
 import rsa
@@ -9,11 +10,13 @@ from graphviz import Digraph
 import simpy
 from PIL import Image
 from DAG.dag import DAG
+from scipy.stats import kstest, poisson,  chisquare
+import numpy as np
 
 # class Network, representing the whole network
 class Network:
     # Initialization function to set up a new Network
-    def __init__(self, num_nodes,p, delay_range=(0.05, 0.5)): #, log_queue
+    def __init__(self, num_nodes,p, delay_range=(0.05, 0.25)): #, log_queue
 
         # # Generate the specified number of Nodes for the Network with different delay ranges
         # self.nodes = [Node(f"Node {i + 1}", self,  delay_range=(2 + 0.5 * i, 4 + 0.5 * i)) for i in range(num_nodes)] # log_queue,
@@ -41,16 +44,158 @@ class Network:
         print("Delays assigned.")
         self.future_transactions = {}
         self.time = 0
-    # def transaction_received_by_all(self, transaction_id):
-    #     nodes_received_transaction = []
-    #     for node in self.nodes:
-    #         nodes_received_transaction.extend([(node.name, trans_id) for trans_id in node.nodes_received_transactions if
-    #                                            trans_id == transaction_id])
-    #
-    #     for node in self.nodes:
-    #         if node.name not in nodes_received_transaction and transaction_id in node.transaction_list:
-    #             return False
-    #     return True
+    ##########################################################################
+    def generate_peers(self, p):
+        peers = {}
+        for i in range(self.N):
+            peers[i] = [j for j in range(self.N) if i != j and random.random() < p]
+            print(f"Node {i} has peers: {peers[i]}")
+        return peers
+
+    def assign_delays(self, delay_range):
+        delay_matrix = {}
+        for i in range(len(self.nodes)):
+            delay_matrix[i] = {}
+            for j in self.peers[i]:
+                delay_matrix[i][j] = random.uniform(*delay_range)
+        return delay_matrix
+
+    def add_transaction_to_future(self, transaction, node_id, delay):
+        time_to_execute = self.time + delay
+        print(f"Adding transaction {transaction} for node {node_id} to be delivered at time {time_to_execute}")
+        if time_to_execute not in self.future_transactions:
+            self.future_transactions[time_to_execute] = []
+        self.future_transactions[time_to_execute].append((transaction, node_id))
+
+    def simulate_second(self):
+        # Generate transactions for each node
+        print("Generating transactions for each node...")
+        for node in self.nodes:
+            node.generate_transaction(self)
+        print("Transactions generated.")
+
+        # Move time forward
+        self.time += 1
+
+        # Examine the transaction status for node at specific times
+        check_times = [10, 50, 59]
+        if self.time in check_times:
+            for node in self.nodes:
+                node_id_to_check = node.name
+                future_txs = self.future_transactions_for_node(node_id_to_check)
+                received_txs = node.transactions_received()
+
+                print(f"At time {self.time}, node {node_id_to_check} has {future_txs} future transactions.")
+                print(f"At time {self.time}, node {node_id_to_check} has received {received_txs} transactions.")
+
+        # Deliver transactions
+        print(f"Checking for transactions to deliver at time {self.time}")
+
+        # Use a loop to continuously check for transactions to be delivered during this second
+        while True:
+            # Find transactions that are set to be delivered within the current second
+            deliverable_transactions = [(t, v) for t, v in self.future_transactions.items() if t <= self.time]
+
+            # Exit loop if there are no transactions to deliver
+            if not deliverable_transactions:
+                break
+
+            # Process each deliverable transaction
+            for delivery_time, transactions in deliverable_transactions:
+                for transaction, node_id in transactions:
+                    print(f"Delivering transaction {transaction} to node {node_id} at time {self.time}")
+                    self.nodes[node_id].add_transaction(transaction)
+
+                    # Start gossiping transaction to the peers
+                    self.gossip_transaction(transaction, node_id)
+
+                # Remove them from future_transactions once processed
+                del self.future_transactions[delivery_time]
+
+        # Update history of each node
+        for node in self.nodes:
+            node.update_history()
+
+    def gossip_transaction(self, transaction, originating_node_id, visited_nodes=set(), delay=0,  subset_factor=0.5):
+        # Avoid cycles
+        if originating_node_id in visited_nodes:
+            return
+        visited_nodes.add(originating_node_id)
+
+        peers = self.peers[originating_node_id]
+        # Selecting a subset of peers
+        subset_size = int(len(peers) * subset_factor)
+        subset_of_peers = random.sample(peers, min(subset_size, len(peers)))
+
+        for peer in subset_of_peers:
+            if peer in visited_nodes:  # Avoid sending transaction back to the sender
+                continue
+            # Deliver transaction to the peer with a delay
+            delay = self.delay_matrix[originating_node_id][peer]
+            self.add_transaction_to_future(transaction, peer, delay)
+
+            # Recursively gossip the transaction to the peers of the peer
+            self.gossip_transaction(transaction, peer, visited_nodes.copy(), delay, subset_factor)
+
+    def combined_generation_rate(self, node_id):
+        peer_rates = [self.nodes[peer].tx_rate for peer in self.peers[node_id]]
+        return sum(peer_rates)
+
+    def print_combined_generation_rate(self):
+        for node_id in range(self.N):  # Assuming self.N is the total number of nodes.
+            rate = self.combined_generation_rate(node_id)
+            print(f"Node {node_id} has a combined generation rate of: {rate}")
+    def average_delay(self, node_id):
+        delays = [self.delay_matrix[node_id][peer] for peer in self.peers[node_id]]
+        return np.mean(delays), np.var(delays)
+
+    def print_average_delays(self):
+        for node_id in range(self.N):
+            mean_delay, var_delay = self.average_delay(node_id)
+            print(f"Node {node_id} has an average delay of: {mean_delay} with variance: {var_delay}")
+
+    def simulate_without_delays(self, node_id, simulation_time):
+        combined_rate = self.combined_generation_rate(node_id)
+        times = np.cumsum(np.random.exponential(1 / combined_rate, int(simulation_time * combined_rate)))
+        return times[times <= simulation_time]
+
+    def simulate_with_delays(self, node_id, simulation_time):
+        times_without_delays = self.simulate_without_delays(node_id, simulation_time)
+        times_with_delays = []
+        for time in times_without_delays:
+            delay = np.random.choice([self.delay_matrix[node_id][peer] for peer in
+                                      self.peers[node_id]])  # Randomly choosing a delay from peers
+            times_with_delays.append(time + delay)
+        return np.array(times_with_delays)
+
+    def inter_arrival_times(sel,times):
+        return np.diff(times)
+
+    def plot_inter_arrival_histogram(self, node_id, simulation_time):
+        times_with_delays = self.simulate_with_delays(node_id, simulation_time)
+        # times_withot_delays = self.simulate_without_delays(node_id, simulation_time)
+        inter_arrivals = self.inter_arrival_times(times_with_delays)
+        inter_arrivals = [i for i in inter_arrivals if i >= 0]
+        # Overlaying the exponential distribution
+        lambda_value = 1 / np.mean(inter_arrivals)  # Rate parameter for exponential distribution
+        x = np.linspace(min(inter_arrivals), max(inter_arrivals), 1000)
+        y = lambda_value * np.exp(-lambda_value * x)
+        plt.plot(x, y, 'r-', label="Expected Exponential Distribution")
+        plt.hist(inter_arrivals, bins=50, density=True, alpha=0.7, label="Observed Distribution")
+        plt.xlabel('Inter-arrival Time')
+        plt.ylabel('Frequency')
+        plt.legend()
+        plt.show(block=True)
+    def future_transactions_for_node(self, node_id):
+        return sum([len([(t_id, n_id) for t_id, n_id in v if n_id == node_id])
+                    for k, v in self.future_transactions.items()])
+
+    def print_all_node_transactions(self):
+        for node in self.nodes:
+            node.print_transactions()
+
+
+###############################################################################
 
     def get_last_receive_time(self, transaction_id):
         last_receive_time = None
@@ -91,61 +236,6 @@ class Network:
                     node.peers.append(peer)
                     if node not in peer.peers:  # To avoid Duplicates
                         peer.peers.append(node)
-##########################################################################
-    def generate_peers(self, p):
-        peers = {}
-        for i in range(self.N):
-            peers[i] = [j for j in range(self.N) if i != j and random.random() < p]
-            print(f"Node {i} has peers: {peers[i]}")
-        return peers
-
-    def assign_delays(self, delay_range):
-        delay_matrix = {}
-        for i in range(len(self.nodes)):
-            delay_matrix[i] = {}
-            for j in self.peers[i]:
-                delay_matrix[i][j] = random.uniform(*delay_range)
-        return delay_matrix
-
-    def add_transaction_to_future(self, transaction, node_id, delay):
-        time_to_execute = self.time + delay
-        print(f"Adding transaction {transaction} for node {node_id} to be delivered at time {time_to_execute}")
-        if time_to_execute not in self.future_transactions:
-            self.future_transactions[time_to_execute] = []
-        self.future_transactions[time_to_execute].append((transaction, node_id))
-
-    def simulate_second(self):
-        # Generate transactions for each node
-        print("Generating transactions for each node...")
-        for node in self.nodes:
-            node.generate_transaction(self)
-        print("Transactions generated.")
-
-        # Move time forward
-        self.time += 1
-
-        # Deliver transactions
-        print(f"Checking for transactions to deliver at time {self.time}")
-
-        # Use a loop to continuously check for transactions to be delivered during this second
-        while True:
-            # Find transactions that are set to be delivered within the current second
-            deliverable_transactions = [(t, v) for t, v in self.future_transactions.items() if t < self.time]
-
-            # Exit loop if there are no transactions to deliver
-            if not deliverable_transactions:
-                break
-
-            # Process each deliverable transaction
-            for delivery_time, transactions in deliverable_transactions:
-                for transaction, node_id in transactions:
-                    print(f"Delivering transaction {transaction} to node {node_id} at time {self.time}")
-                    self.nodes[node_id].queue.append(transaction)
-
-                # Once the transactions for this delivery_time have been processed, remove them from future_transactions
-                del self.future_transactions[delivery_time]
-
-    ###############################################################################
     def generate_delay_matrix(self):
         self.delay_matrix = {}
         # For each pair of Nodes in the Network...
