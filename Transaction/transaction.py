@@ -17,8 +17,6 @@ class Transaction:
         self.branch_weight = 0
         self.signature = None
         self.data = data
-        # self.timestamp = datetime.now().strftime('%H:%M:%S.%f')[:-3]  # Gives you time up to milliseconds
-        # self.timestamp += str(int(time.time() * 1e9))[-6:]  # Append the last six digits of the current nanosecond time
         self.timestamp = datetime.now()
         self.node = node if node else None
         self.is_confirmed = False  #Transaction confirmation check
@@ -27,14 +25,11 @@ class Transaction:
         self.difficulty = 1
 
     def __str__(self):
-        #readable_timestamp = datetime.fromtimestamp(self.timestamp).strftime('%Y-%m-%d %H:%M:%S')
-        #readable_timestamp = datetime.fromtimestamp(self.timestamp).strftime('%H:%M:%S')
+
         return f"Transaction(ID: {self.txid}, Node: {self.node.name}, Timestamp: {self.timestamp}, Parents: {self.parent_txids})"
 
     def confirm(self):
-        #print(f"Confirming transaction {self.txid}")  # Add this line
         self.is_confirmed = True
-        #print(f"Transaction {self.txid} confirmed status is {self.is_confirmed}")  # Add this line
 
     def get_data_to_sign(self):
         data_hash = sha256(self.data.encode()).hexdigest()
@@ -43,15 +38,11 @@ class Transaction:
     def validate_transaction(self, DIFFICULTY):
         if self.node is None:
             return False
-
-
             print("Double spending detected in parent transactions!")
             return False
-
         if not self.verify_proof_of_work(DIFFICULTY):
             print("Invalid proof of work!")
             return False
-
         try:
             rsa.verify(
                 self.get_data_to_sign(),
@@ -64,13 +55,9 @@ class Transaction:
 
     def update_accumulative_weight(self):
         self.accumulative_weight = self.weight
-        # print(f"Updating weight for transaction {self.txid} which has {len(self.children)} children.")
         for child in self.children:
-            # print(f"Child {child.txid} weight before update: {child.accumulative_weight}")
             child.update_accumulative_weight()
             self.accumulative_weight += child.accumulative_weight
-            # print(f"Child {child.txid} weight after update: {child.accumulative_weight}")
-
         return self.accumulative_weight
 
     def get_all_parents(self):
@@ -96,7 +83,6 @@ class Transaction:
         # check whether the hash has the required number of leading zeros
         prefix = '0' * DIFFICULTY
         return hash_result.startswith(prefix)
-
     def get_parents_until_N(self, N_transactions):
         """Get all parent transactions up to N"""
         if not self.parent_transactions or self in N_transactions:

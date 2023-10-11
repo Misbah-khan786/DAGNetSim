@@ -1,4 +1,3 @@
-from .dag import DAG
-from .dag_event import DAG_Event
+from .IOTA_DAG_EVENT_Thread import IOTA_DAG
 from .IOTA_DAG_EVENT import IOTA_DAG
 

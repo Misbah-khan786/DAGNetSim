@@ -162,34 +162,3 @@ def main():
 if __name__ == "__main__":
     main()
 
-# def plot_weight_durations(durations_list, file_names):
-#     """Plot weight update durations from multiple nodes on a single graph."""
-#     colors = [
-#         'royalblue', 'darkorange', 'forestgreen', 'firebrick', 'mediumpurple',
-#         'saddlebrown', 'deepskyblue', 'limegreen', 'pink', 'grey',
-#         'goldenrod', 'midnightblue', 'aqua', 'magenta', 'yellowgreen',
-#         'black', 'red', 'cyan', 'lightcoral', 'darkolivegreen'
-#     ]
-#     max_transactions = max([len(durations) for durations in durations_list])
-#     plt.figure(figsize=(10, 6))
-#
-#     for idx, durations in enumerate(durations_list):
-#         x = [0] + list(range(1, len(durations) + 1))
-#         y = [0] + durations
-#         degree = 1
-#         coeffs = np.polyfit(x, y, degree)
-#         p = np.poly1d(coeffs)
-#         x_smooth = list(range(max_transactions + 1))
-#         y_smooth = p(x_smooth)
-#
-#         label = parse_file_name(file_names[idx])
-#         plt.plot(x_smooth, y_smooth, '-', color=colors[idx], markersize=4, linewidth=2, label=label)  # '-' for solid line
-#
-#     plt.xlabel('Transaction Count')
-#     plt.ylabel('Weight Update Duration (Seconds)')
-#     plt.title('Weight Update Duration for One Node')
-#     plt.legend(loc="upper right")
-#     plt.xlim(0, max_transactions)
-#     plt.grid(True)
-#     plt.tight_layout()
-#     plt.show()

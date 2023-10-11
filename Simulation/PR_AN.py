@@ -32,7 +32,7 @@ if __name__ == '__main__':
     observer_dummy = Observer(None)  # Temp observer to generate observation times
     observation_times = [round(time) for time in observer_dummy.generate_observation_times(end_time=3600, num_observations=10)]
     print(observation_times)
-    transaction_counts, network, observer  = simulate(5, 0.4, 3600, observation_times)
+    transaction_counts, network, observer  = simulate(15, 0.5, 3600, observation_times)
     mean_transactions = np.mean(transaction_counts)
     print("Mean Transactions",mean_transactions)
     # expected_distribution = [poisson.pmf(i, mean_transactions) for i in range(max(transaction_counts) + 1)]
@@ -47,34 +47,33 @@ if __name__ == '__main__':
    #  print("\nTransactions for Each Node:")
    #  network.print_all_node_transactions()
 
-    # Observer
-
-    # observer = Observer(network)
-
-    # # uniform or exponential
-    # observation_times = observer.generate_observation_times(end_time=600, distribution='uniform')
-    # # For fixed intervals of 15 minutes:
-    # observation_times = observer.generate_observation_times(end_time=3600, interval=900)
-    # For 20 random observations within the hour:
-    # observation_times = observer.generate_observation_times(end_time=60, num_observations=3)
-    # print(observation_times)
-    #
-    # observer.observe_nodes(observation_times)
-    # print(observer.node_observations.keys())
-    # print(observer.node_observations)
-    # observer.analyse_transactions()
-    # print("Transaction Analysis:", observer.transaction_analysis)
-    # observer.analyse_tips()
-    # print("Tips Analysis:", observer.tips_analysis)  # Debugging output
-    # print(observer.transaction_analysis.keys())
-    # print(observer.tips_analysis.keys())
 
     for time in observation_times:
         print(f"Time: {time}, {observer.assess_node_convergence(time)}")
-    # observer.document_tips()
+        # Compute Tip Frequency after all observations
+    tip_frequencies = observer.compute_tip_frequency()
+    # Optional: Print top 10 tips by frequency
+    for tip, freq in tip_frequencies[:10]:
+        print(f"Tip: {tip}, Frequency: {freq}")
+    observer.plot_tip_frequencies(tip_frequencies)
+    observer.plot_tips_over_time()
+    observer.plot_tip_validation_distribution()
+    # Assuming you want the average tip lifetime and confirmation rate for all observed tips
 
-    # # Call other observer methods as needed
-    # observer.analyse_tip_convergence()
+
+    avg_tip_lifetime = observer.compute_average_tip_lifetime()
+    print(f"Average Tip Lifetime: {avg_tip_lifetime}")
+
+    confirmation_rate = observer.tip_confirmation_rate()
+    print(f"Tip Confirmation Rate: {confirmation_rate}")
+
+    # observer.plot_pairwise_overlap_heatmap('all_transactions')
+    # observer.plot_average_overlap_heatmap('all_transactions')
+    # observer.plot_jaccard_similarity_heatmap('all_transactions')
+    observer.visualize()
+
+
+
 
 
 

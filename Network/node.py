@@ -18,56 +18,22 @@ from multiprocessing import Manager
 import pickle
 import random
 import numpy as np
-# def setup_logger(logger_name, log_file, log_queue, level=logging.INFO):
-#     ...
-#     logger = logging.getLogger(logger_name)
-#     logger.setLevel(level)
-#
-#     # Check and clear if logger already has handlers
-#     if logger.hasHandlers():
-#         logger.handlers.clear()
-#
-#     q_handler = logging.handlers.QueueHandler(log_queue)
-#     logger.addHandler(q_handler)
-#
-#     logger.debug('Logger setup successfully.')
-#     return logger
-#
-# handlers_dict = {}  # a dictionary to store handlers by logger name
-# def logger_listener_process(log_queue):
-#     while True:
-#         record = log_queue.get()
-#         if record is None:
-#             break
-#
-#         log_file = f"logs/{record.name}.log"
-#
-#         if record.name not in handlers_dict:
-#             try:
-#                 handler = logging.FileHandler(log_file, mode='w')  # using 'a' ensures log messages append to existing file if it's there
-#                 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
-#                 handler.setFormatter(formatter)
-#                 logger = logging.getLogger(record.name)
-#                 logger.addHandler(handler)
-#                 logger.setLevel(logging.INFO)
-#                 handlers_dict[record.name] = handler
-#                 print(f"Setup handler for {record.name} and log file: {log_file}")
-#             except Exception as e:
-#                 print(f"Error setting up handler for {record.name}: {str(e)}")
-#
-#         try:
-#             logger = logging.getLogger(record.name)
-#             logger.handle(record)
-#             handlers_dict[record.name].flush()
-#             print(f"Handled log for {record.name} with message: {record.msg}")
-#         except Exception as e:
-#             print(f"Error handling log for {record.name}: {str(e)}")
-#
-#     for handler in handlers_dict.values():
-#         handler.close()
-#
-#     print("Listener ended.")
 
+def setup_logger(logger_name, log_file, level=logging.INFO):
+    # Create the logs directory if it doesn't exist
+    if not os.path.exists('logs'):
+        os.makedirs('logs')
+    handler = logging.FileHandler(log_file, mode='w')
+    # Including time in the log messages
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+    handler.setFormatter(formatter)
+    logger = logging.getLogger(logger_name)
+    logger.setLevel(level)
+    # Remove all handlers from the logger if it already exists and has handlers
+    if logger.hasHandlers():
+        logger.handlers.clear()
+    logger.addHandler(handler)
+    return logger
 # a class  Node, representing a participant in the network
 class Node:
     # Initialization function to set up a new Node
@@ -80,7 +46,7 @@ class Node:
         # Generate a pair of RSA keys for the Node, one public and one private
         (self.public_key, self.private_key) = rsa.newkeys(512)
         # Initialize an empty list to store the Node's transactions
-        self.transaction_list = manager.list() #
+        self.transaction_list = []# manager.list()
         # Initialize an empty list to store the Node's unconfirmed/confirmed transactions
         self.unconfirmed_transactions = []
         self.confirmed_transactions = []
@@ -89,17 +55,13 @@ class Node:
         # Initialize an empty list to store the Node's milestones
         self.milestones = []
         self.genesis_milestone = None  # to recieve Gensis milestone by Nodes in Dag_Event class
-        self.nodes_received_transactions =manager.list()#manager.list()
-        self.tips=  manager.list()#
+        self.nodes_received_transactions = []# manager.list()
+        self.tips= [] # manager.list()#
         self.broadcasted_transactions = []
         self.is_coordinator = False
         self.coordinator_public_key = None
         self.transaction_counter = 0
         self.seen_and_broadcasted_transactions = set()
-        # Configure the logger for the node
-        # log_file = f"logs/{self.name}.log"
-        # self.logger = setup_logger(self.name, log_file, log_queue)
-        # self.logger.info("This is a test log message.")
         self.DIFFICULTY = 1
         self.lock = asyncio.Lock()
         self.pending_transactions = []  # list of tuples to store pending transactions and their timestamp
@@ -111,15 +73,20 @@ class Node:
         self.nodes_received_transactions_lock= manager.Lock()
         self.transaction_list_lock = manager.Lock()
 
-        ##########################
-        self.queue = []
-        self.tx_rate = random.uniform(0.01, 0.1)
-        self.transaction_count = 0
-        self.generated_transactions = []
-        self.transaction_history = []  # For historical data
-        self.current_transactions = 0  # For the current second
-        self.parent_map = {'genesis': False}  # Dictionary to keep track of which transactions are parents
-        self.tips = ['genesis']  # List to keep track of tips, initialized with the genesis transaction
+        ################################## Uncoment to use PR_AN.py #########################################
+        # self.queue = []
+        # self.tx_rate = random.uniform(0.01, 0.1)
+        # self.transaction_count = 0
+        # self.generated_transactions = []
+        # self.transaction_history = []  # For historical data
+        # self.current_transactions = 0  # For the current second
+        # self.parent_map = {'genesis': False}  # Dictionary to keep track of which transactions are parents
+        # self.tips = ['genesis']  # List to keep track of tips, initialized with the genesis transaction
+        # self.tip_creation_times = {}  # {tip_id: creation_time}
+        # self.tip_lifetimes = {}  # {tip_id: lifetime}
+
+        #########################################
+
     def generate_transaction(self, network):
         # Draw a sample from Poisson distribution to get the number of transactions for this node at this time step
         num_transactions = np.random.poisson(self.tx_rate)
@@ -166,9 +133,16 @@ class Node:
 
         # Also, add the new transaction to the parent_map with is_parent as False
         self.parent_map[txid] = False
-        print(f"Node {self.name} removed {parents} from tips.")
-        print(f"Node {self.name} added {txid} to tips.")
-        print(f"Node {self.name} updated tips: {self.tips} from old tips: {old_tips}")
+        for parent in parents:
+            if parent in self.tip_creation_times:
+                self.tip_lifetimes[parent] = self.network.time - self.tip_creation_times[parent]
+                del self.tip_creation_times[parent]  # remove the tip since it's confirmed
+
+            # For the new tip:
+        self.tip_creation_times[txid] = self.network.time
+        # print(f"Node {self.name} removed {parents} from tips.")
+        # print(f"Node {self.name} added {txid} to tips.")
+        # print(f"Node {self.name} updated tips: {self.tips} from old tips: {old_tips}")
     def transactions_received(self):
         return len(self.queue)
     def generate_id(self):

@@ -30,8 +30,6 @@ class RandomWalker:
         # Define the interval (W to WD seconds)
         w = 30# Start of interval, in seconds
         wd = w * 2  # End of interval, in seconds
-        # for tx in dag.transactions.values():
-        #     print(f" Transaction {tx.txid} was  created at {tx.timestamp} with parent {tx.parent_txids} .")
 
         # If the DAG is younger than the specified interval (WD seconds), adjust WD
         if current_time - dag.creation_time < timedelta(seconds=wd):
@@ -44,25 +42,18 @@ class RandomWalker:
         end_time = current_time - timedelta(seconds=w)
 
         # Get all transactions that happened within the interval
-        # for tx in prev_tips:
-        #     print(f" time stap of {tx.txid} is {tx.timestamp}")
         interval_transactions = [tx for tx in prev_tips if start_time <= tx.timestamp <= end_time]
         # print("Interval Transactions", interval_transactions)
-
         print(f"Transactions from the past {w}-{wd} seconds:")
-        # self.logger.info(f"{datetime.now().strftime('%H:%M:%S.%f')} -  For {self.node} Transactions from the past {w}-{wd} seconds:")
         print(', '.join("Txid=" + str(transaction.txid) for transaction in interval_transactions))
         self.logger.info(', '.join("Txid=" + str(transaction.txid) for transaction in interval_transactions))
-
         if len(interval_transactions) < self.N:
             start_transactions = interval_transactions
             print(f"Not enough transactions in the interval, selected all {len(start_transactions)} transactions")
-            # self.logger.info(f"{datetime.now().strftime('%H:%M:%S.%f')} - {self.node} : Not enough transactions in the interval, selected all {len(start_transactions)} transactions")
         else:
             # Randomly select N transactions from the interval
             start_transactions = random.sample(interval_transactions, self.N)
             print(f"Randomly selected N={self.N} transactions from the interval:")
-            # self.logger.info(f"{datetime.now().strftime('%H:%M:%S.%f')} -For {self.node}:Randomly selected N={self.N} transactions from the interval:")
             print(', '.join("Txid=" + str(transaction.txid) for transaction in start_transactions))
             self.logger.info(', '.join("Txid=" + str(transaction.txid) for transaction in start_transactions))
 
@@ -77,12 +68,9 @@ class RandomWalker:
             t = asyncio.create_task(self.walk_from(start_transaction, reached_tips, tip_paths))
             # Add the task to the tasks list
             tasks.append(t)
-
         # Wait for all tasks to finish
         await asyncio.gather(*tasks)
-
         reached_tips = list(set(reached_tips))  # Use a set to remove duplicates
-
         # If fewer than two unique tips were reached, select additional tips randomly
         while len(reached_tips) < 2:
             print("Fewer than two unique tips were reached, selected tips randomly")
@@ -138,32 +126,18 @@ class RandomWalker:
                 weights = [child.accumulative_weight for child in current_transaction.children]
                 probabilities = [np.exp(self.alpha_low * weight) for weight in weights]
                 probabilities /= np.sum(probabilities)
-
-                # # Compute and normalize probabilities
-                # H_x = current_transaction.accumulative_weight
-                # weights = [child.accumulative_weight for child in current_transaction.children]  # H_y values
-                # sum_exp = np.sum([np.exp(-self.alpha_low * (H_x - weight)) for weight in weights])
-                # probabilities = [np.exp(-self.alpha_low * (H_x - weight)) * sum_exp ** (-1) for weight in weights]
-                # probabilities /= np.sum(probabilities)
-
-                # Create a dictionary of child IDs and their corresponding probabilities
-                prob_dict = {child.txid: prob for child, prob in zip(current_transaction.children, probabilities)}
-
                 # Create a dictionary of child IDs and their corresponding probabilities and weights
                 prob_and_weight_dict = {child.txid: {"prob": prob, "weight": weight} for child, prob, weight in
                                         zip(current_transaction.children, probabilities, weights)}
-
                 print(f"Probability and weight distribution: {prob_and_weight_dict}")
                 self.logger.info(
                     f"{datetime.now().strftime('%H:%M:%S.%f')} - {threading.current_thread().name} For {self.node} Probability and weight distribution: {prob_and_weight_dict}")
-
             current_transaction = np.random.choice(current_transaction.children, p=probabilities)
             path.append(current_transaction)  # Updating the path
             print(
                 f"{threading.current_thread().name} - Chose the transaction {current_transaction.txid} based on probability")
             self.logger.info(
                 f"{datetime.now().strftime('%H:%M:%S.%f')} - {threading.current_thread().name} - For {self.node}  Select Transaction {current_transaction.txid} based on probability {probabilities}")
-
         # This is a critical section, we must ensure that no two tasks modify these lists at the same time
         async with asyncio.Lock():
             # Append a tuple containing the transaction and the current timestamp
@@ -173,7 +147,6 @@ class RandomWalker:
                 tip_paths[current_transaction.txid].append(path_ids)
             else:
                 tip_paths[current_transaction.txid] = [path_ids]
-
     async def compute_path_to_tip_event(self, dag, tip, interval_transactions):
         path = [tip.txid]
         current_transaction = tip
@@ -184,17 +157,13 @@ class RandomWalker:
             # Select the first parent for simplicity; you might need to adjust this
             current_transaction = current_transaction.parent_transactions[0]
             path.append(current_transaction.txid)
-
         # Add the W-th transaction to the path if it's one of the parents of the current transaction
         W_transaction = [parent for parent in current_transaction.parent_transactions if parent.txid in W_batch_txids]
         if W_transaction:
             path.append(W_transaction[0].txid)
-
             # Reverse the path so it starts with the W-th transaction and ends with the tip
         path = list(reversed(path))
-
         return path
-
     def select_model_tip(self, dag, prev_tips, current_batch_transactions):
         print("MODEL TIP SELECTION START")
         # Get the transactions from W batches back

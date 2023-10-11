@@ -1,49 +1,42 @@
 
 import matplotlib.pyplot as plt
 from Network.node import Node, Coordinator
-from datetime import datetime
-import rsa
 import random
-import time
 import os
 from graphviz import Digraph
-import simpy
 from PIL import Image
-from DAG.dag import DAG
-from scipy.stats import kstest, poisson,  chisquare
 import numpy as np
-
 # class Network, representing the whole network
 class Network:
     # Initialization function to set up a new Network
     def __init__(self, num_nodes,p, delay_range=(0.05, 0.25)): #, log_queue
 
-        # # Generate the specified number of Nodes for the Network with different delay ranges
-        # self.nodes = [Node(f"Node {i + 1}", self,  delay_range=(2 + 0.5 * i, 4 + 0.5 * i)) for i in range(num_nodes)] # log_queue,
-        # # adding coordinator to the network
-        # self.coordinator = Coordinator("Coordinator", self,  milestones_interval=150, is_coordinator=True) #log_queue,
-        # self.nodes.append(self.coordinator)
-        # self.configure_nodes_with_coordinator(self.coordinator.coordinator_public_key)
-        # # Connect all the nodes in the Network to each other
-        # self.create_peers()
-        # # Generate delay matrix for the network
-        # self.generate_delay_matrix()
+        # Generate the specified number of Nodes for the Network with different delay ranges
+        self.nodes = [Node(f"Node {i + 1}", self,  delay_range=(2 + 0.5 * i, 4 + 0.5 * i)) for i in range(num_nodes)] # log_queue,
+        # adding coordinator to the network
+        self.coordinator = Coordinator("Coordinator", self,  milestones_interval=150, is_coordinator=True) #log_queue,
+        self.nodes.append(self.coordinator)
+        self.configure_nodes_with_coordinator(self.coordinator.coordinator_public_key)
+        # Connect all the nodes in the Network to each other
+        self.create_peers()
+        # Generate delay matrix for the network
+        self.generate_delay_matrix()
 
-        ##################################
-        self.N = num_nodes
-        print("Initializing nodes...")
-        self.nodes = [Node(i,self) for i in range(self.N)]
-        print("Nodes initialized.")
-
-        print("Generating peers...")
-        self.peers = self.generate_peers(p)
-        print("Peers generated.")
-
-        print("Assigning delays...")
-        self.delay_matrix = self.assign_delays(delay_range)
-        print("Delays assigned.")
-        self.future_transactions = {}
-        self.time = 0
+        ################################## Uncoment to use PR_AN.py #########################################
+        # self.N = num_nodes
+        # print("Initializing nodes...")
+        # self.nodes = [Node(i,self) for i in range(self.N)]
+        # print("Nodes initialized.")
+        #
+        # print("Generating peers...")
+        # self.peers = self.generate_peers(p)
+        # print("Peers generated.")
+        #
+        # print("Assigning delays...")
+        # self.delay_matrix = self.assign_delays(delay_range)
+        # print("Delays assigned.")
+        # self.future_transactions = {}
+        # self.time = 0
     ##########################################################################
     def generate_peers(self, p):
         peers = {}
@@ -116,7 +109,7 @@ class Network:
         for node in self.nodes:
             node.update_history()
 
-    def gossip_transaction(self, transaction, originating_node_id, visited_nodes=set(), delay=0,  subset_factor=0.5):
+    def gossip_transaction(self, transaction, originating_node_id, visited_nodes=set(), delay=0,  subset_factor=0.7):
         # Avoid cycles
         if originating_node_id in visited_nodes:
             return
@@ -207,14 +200,12 @@ class Network:
 
     # Method to select a random Node from the Network
     def get_random_node(self):
-        # Select a Node at random
-        # node = random.choice(self.nodes)
+
         nodes_without_coordinator = [node for node in self.nodes if not isinstance(node, Coordinator)]
         node = random.choice(nodes_without_coordinator)
         # Return the selected Node
         return node
     # Method to connect each Node in the Network to a subset of the other Nodes
-
     def create_peers(self):
         # Calculate the number of peers to be connected with
         num_peers = max(1, int(len(self.nodes) * 0.2))
