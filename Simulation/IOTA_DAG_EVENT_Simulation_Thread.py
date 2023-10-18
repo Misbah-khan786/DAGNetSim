@@ -8,27 +8,24 @@ DIFFICULTY =1
 
 if __name__ == '__main__':
     print("Starting simulation...")
-    num_nodes = 12
+    num_nodes = 20
     # poisson_rate = 0.3
-    milestones_interval = 10
-    sim_time = 0.30 # Add the simulation_time
+    milestones_interval = 120
+    sim_time = 60 # Add the simulation_time
     # Create the network
     network = Network(num_nodes)
-    ########
     # Nodes without coordinator
     nodes_without_coordinator = [node for node in network.nodes if not isinstance(node, Coordinator)]
     # Desired total rate for the tangle
     lambda_total = 100
     # Generate random rates for each node
-    random_rates = [random.uniform(0.0001, 0.1) for node in nodes_without_coordinator]
+    random_rates = [random.uniform(0.001, 0.01) for node in nodes_without_coordinator]
     # Calculate the sum of these random rates
     sum_random_rates = sum(random_rates)
     # Normalize the random rates to sum up to lambda_total
     normalized_rates = [lambda_total * (rate / sum_random_rates) for rate in random_rates]
     # Assign these normalized rates to each node
     poisson_rate = {node.name: rate for node, rate in zip(nodes_without_coordinator, normalized_rates)}
-    ##########
-    #poisson_rate = {node.name: random.uniform(1, 5) for node in network.nodes}  # 0.0001, 0.01
     IOTA_DAG = IOTA_DAG(poisson_rate, milestones_interval, network)
     # network.dag.add_coordinator(coordinator)  # line to set the coordinator object
     IOTA_DAG.coordinator = network.coordinator

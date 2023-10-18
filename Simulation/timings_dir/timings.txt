@@ -57319,3 +57319,119 @@ Updating Weights (Node: Node 3) took 0.0001 seconds.
 Random walk tip selction  (Node: Node 3) took 0.0006 seconds.
 Parent Transaction Validation (Node: Node 3) took 0.0000 seconds.
 Transaction Creation and appending (Node: Node 3) took 0.0023 seconds.
+Random walk tip selction  (Node: Node 2) took 0.0015 seconds.
+Parent Transaction Validation (Node: Node 2) took 0.0000 seconds.
+Random walk tip selction  (Node: Node 3) took 0.0008 seconds.
+Parent Transaction Validation (Node: Node 3) took 0.0000 seconds.
+Transaction Creation and appending (Node: Node 2) took 0.0093 seconds.
+Random walk tip selction  (Node: Node 4) took 0.0007 seconds.
+econds.
+Parent Transaction Validation (Node: Node 4) took 0.0000 seconds.
+Transaction Creation and appending (Node: Node 4) took 0.0073 seconds.
+Random walk tip selction  (Node: Node 1) took 0.0007 seconds.
+Parent Transaction Validation (Node: Node 1) took 0.0000 seconds.
+Transaction Creation and appending (Node: Node 1) took 0.0111 seconds.
+Updating Tips and Graph (Node: Node 3) took 3.0895 seconds.
+Updating Weights (Node: Node 3) took 0.0001 seconds.
+Random walk tip selction  (Node: Node 3) took 0.0005 seconds.
+Parent Transaction Validation (Node: Node 3) took 0.0004 seconds.
+Transaction Creation and appending (Node: Node 3) took 0.0023 seconds.
+Updating Tips and Graph (Node: Node 4) took 3.7925 seconds.
+Updating Weights (Node: Node 4) took 0.0001 seconds.
+Random walk tip selction  (Node: Node 4) took 0.0005 seconds.
+Parent Transaction Validation (Node: Node 4) took 0.0002 seconds.
+Transaction Creation and appending (Node: Node 4) took 0.0028 seconds.
+Random walk tip selction  (Node: Node 3) took 0.0114 seconds.
+Parent Transaction Validation (Node: Node 3) took 0.0000 seconds.
+Random walk tip selction  (Node: Node 4) took 0.0109 seconds.
+Parent Transaction Validation (Node: Node 4) took 0.0000 seconds.
+Random walk tip selction  (Node: Node 2) took 0.0126 seconds.
+Parent Transaction Validation (Node: Node 2) took 0.0000 seconds.
+Random walk tip selction  (Node: Node 1) took 0.0117 seconds.
+Parent Transaction Validation (Node: Node 1) took 0.0000 seconds.
+Transaction Creation and appending (Node: Node 3) took 0.3153 seconds.
+Transaction Creation and appending (Node: Node 4) took 0.3309 seconds.
+Transaction Creation and appending (Node: Node 2) took 0.3457 seconds.
+Transaction Creation and appending (Node: Node 1) took 0.3482 seconds.
+Updating Tips and Graph (Node: Node 3) took 0.0855 seconds.
+Updating Tips and Graph (Node: Node 4) took 0.0928 seconds.
+Updating Tips and Graph (Node: Node 2) took 0.0828 seconds.
+Updating Tips and Graph (Node: Node 1) took 0.0904 seconds.
+Updating Weights (Node: Node 3) took 0.2202 seconds.
+Updating Weights (Node: Node 4) took 0.2000 seconds.
+Updating Weights (Node: Node 2) took 0.2083 seconds.
+Updating Weights (Node: Node 1) took 0.1856 seconds.
+Random walk tip selction  (Node: Node 2) took 0.1194 seconds.
+Parent Transaction Validation (Node: Node 2) took 0.0003 seconds.
+Transaction Creation and appending (Node: Node 2) took 1.1144 seconds.
+Updating Tips and Graph (Node: Node 2) took 0.0710 seconds.
+Updating Weights (Node: Node 2) took 0.2580 seconds.
+Random walk tip selction  (Node: Node 1) took 0.1670 seconds.
+Parent Transaction Validation (Node: Node 1) took 0.0002 seconds.
+Transaction Creation and appending (Node: Node 1) took 1.5274 seconds.
+Updating Tips and Graph (Node: Node 1) took 0.2243 seconds.
+Updating Weights (Node: Node 1) took 0.3499 seconds.
+Random walk tip selction  (Node: Node 2) took 0.1623 seconds.
+Parent Transaction Validation (Node: Node 2) took 0.0002 seconds.
+Transaction Creation and appending (Node: Node 2) took 1.3904 seconds.
+Updating Tips and Graph (Node: Node 2) took 0.2882 seconds.
+Updating Weights (Node: Node 2) took 1.0993 seconds.
+Random walk tip selction  (Node: Node 1) took 0.8344 seconds.
+Parent Transaction Validation (Node: Node 1) took 0.0002 seconds.
+Transaction Creation and appending (Node: Node 1) took 3.4787 seconds.
+Updating Tips and Graph (Node: Node 1) took 0.3269 seconds.
+Updating Weights (Node: Node 1) took 0.5685 seconds.
+Random walk tip selction  (Node: Node 2) took 0.3804 seconds.
+Parent Transaction Validation (Node: Node 2) took 0.0003 seconds.
+Random walk tip selction  (Node: Node 1) took 0.5470 seconds.
+Parent Transaction Validation (Node: Node 1) took 0.0003 seconds.
+Transaction Creation and appending (Node: Node 2) took 2.0950 seconds.
+Updating Tips and Graph (Node: Node 2) took 0.2529 seconds.
+Updating Weights (Node: Node 2) took 1.2187 seconds.
+Transaction Creation and appending (Node: Node 1) took 3.7086 seconds.
+Updating Tips and Graph (Node: Node 1) took 0.5402 seconds.
+Random walk tip selction  (Node: Node 2) took 0.4048 seconds.
+Parent Transaction Validation (Node: Node 2) took 0.0002 seconds.
+Transaction Creation and appending (Node: Node 2) took 2.4638 seconds.
+Updating Tips and Graph (Node: Node 2) took 0.7626 seconds.
+Updating Weights (Node: Node 2) took 0.5453 seconds.
+Random walk tip selction  (Node: Node 1) took 0.0129 seconds.
+Parent Transaction Validation (Node: Node 1) took 0.0000 seconds.
+Random walk tip selction  (Node: Node 4) took 0.0129 seconds.
+Parent Transaction Validation (Node: Node 4) took 0.0000 seconds.
+Random walk tip selction  (Node: Node 2) took 0.0122 seconds.
+Parent Transaction Validation (Node: Node 2) took 0.0000 seconds.
+Random walk tip selction  (Node: Node 3) took 0.0123 seconds.
+Parent Transaction Validation (Node: Node 3) took 0.0000 seconds.
+Transaction Creation and appending (Node: Node 4) took 1.0489 seconds.
+Transaction Creation and appending (Node: Node 3) took 1.0092 seconds.
+Transaction Creation and appending (Node: Node 1) took 1.2280 seconds.
+Updating Tips and Graph (Node: Node 4) took 0.2223 seconds.
+Transaction Creation and appending (Node: Node 2) took 1.2190 seconds.
+Updating Tips and Graph (Node: Node 3) took 0.1894 seconds.
+Updating Tips and Graph (Node: Node 2) took 0.1109 seconds.
+Updating Tips and Graph (Node: Node 1) took 0.1880 seconds.
+Updating Weights (Node: Node 4) took 0.9380 seconds.
+Updating Weights (Node: Node 3) took 0.9623 seconds.
+Updating Weights (Node: Node 2) took 0.9276 seconds.
+Updating Weights (Node: Node 1) took 1.0159 seconds.
+Random walk tip selction  (Node: Node 4) took 0.6135 seconds.
+Parent Transaction Validation (Node: Node 4) took 0.0003 seconds.
+Transaction Creation and appending (Node: Node 4) took 3.7682 seconds.
+Updating Tips and Graph (Node: Node 4) took 0.4520 seconds.
+Updating Weights (Node: Node 4) took 1.5162 seconds.
+Random walk tip selction  (Node: Node 1) took 0.5326 seconds.
+Parent Transaction Validation (Node: Node 1) took 0.0004 seconds.
+Random walk tip selction  (Node: Node 2) took 0.5173 seconds.
+Parent Transaction Validation (Node: Node 2) took 0.0000 seconds.
+Transaction Creation and appending (Node: Node 1) took 4.0312 seconds.
+Random walk tip selction  (Node: Node 3) took 2.3404 seconds.
+Parent Transaction Validation (Node: Node 3) took 0.0002 seconds.
+Transaction Creation and appending (Node: Node 2) took 3.5013 seconds.
+Updating Tips and Graph (Node: Node 1) took 0.8697 seconds.
+Updating Tips and Graph (Node: Node 2) took 0.1291 seconds.
+Updating Weights (Node: Node 1) took 1.2144 seconds.
+Updating Weights (Node: Node 2) took 1.4833 seconds.
+Transaction Creation and appending (Node: Node 3) took 2.4052 seconds.
+Updating Tips and Graph (Node: Node 3) took 0.5422 seconds.
+Updating Weights (Node: Node 3) took 0.8371 seconds.

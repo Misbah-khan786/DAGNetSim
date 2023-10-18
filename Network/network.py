@@ -11,32 +11,32 @@ class Network:
     # Initialization function to set up a new Network
     def __init__(self, num_nodes,p, delay_range=(0.05, 0.25)): #, log_queue
 
-        # Generate the specified number of Nodes for the Network with different delay ranges
-        self.nodes = [Node(f"Node {i + 1}", self,  delay_range=(2 + 0.5 * i, 4 + 0.5 * i)) for i in range(num_nodes)] # log_queue,
-        # adding coordinator to the network
-        self.coordinator = Coordinator("Coordinator", self,  milestones_interval=150, is_coordinator=True) #log_queue,
-        self.nodes.append(self.coordinator)
-        self.configure_nodes_with_coordinator(self.coordinator.coordinator_public_key)
-        # Connect all the nodes in the Network to each other
-        self.create_peers()
-        # Generate delay matrix for the network
-        self.generate_delay_matrix()
+        # # Generate the specified number of Nodes for the Network with different delay ranges
+        # self.nodes = [Node(f"Node {i + 1}", self,  delay_range=(2 + 0.5 * i, 4 + 0.5 * i)) for i in range(num_nodes)] # log_queue,
+        # # adding coordinator to the network
+        # self.coordinator = Coordinator("Coordinator", self,  milestones_interval=150, is_coordinator=True) #log_queue,
+        # self.nodes.append(self.coordinator)
+        # self.configure_nodes_with_coordinator(self.coordinator.coordinator_public_key)
+        # # Connect all the nodes in the Network to each other
+        # self.create_peers()
+        # # Generate delay matrix for the network
+        # self.generate_delay_matrix()
 
         ################################## Uncoment to use PR_AN.py #########################################
-        # self.N = num_nodes
-        # print("Initializing nodes...")
-        # self.nodes = [Node(i,self) for i in range(self.N)]
-        # print("Nodes initialized.")
-        #
-        # print("Generating peers...")
-        # self.peers = self.generate_peers(p)
-        # print("Peers generated.")
-        #
-        # print("Assigning delays...")
-        # self.delay_matrix = self.assign_delays(delay_range)
-        # print("Delays assigned.")
-        # self.future_transactions = {}
-        # self.time = 0
+        self.N = num_nodes
+        print("Initializing nodes...")
+        self.nodes = [Node(i,self) for i in range(self.N)]
+        print("Nodes initialized.")
+
+        print("Generating peers...")
+        self.peers = self.generate_peers(p)
+        print("Peers generated.")
+
+        print("Assigning delays...")
+        self.delay_matrix = self.assign_delays(delay_range)
+        print("Delays assigned.")
+        self.future_transactions = {}
+        self.time = 0
     ##########################################################################
     def generate_peers(self, p):
         peers = {}

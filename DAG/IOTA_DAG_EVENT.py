@@ -163,15 +163,15 @@ class IOTA_DAG:
             # tx.batch_num = self.batch_num
             for parent in tx.parent_transactions:
                 parent.children.append(tx)
-                # if parent in node.tips:
-                #     node.tips.remove(parent)
+                if parent in node.tips:
+                    node.tips.remove(parent)
                 # if len(parent.children) == 1:
                 #     node.tips.append(parent)
             node_graph = self.node_graphs[node.name]
             for parent in parent_txids:
                 node_graph.add_edge(parent, txid)
                 self.graph.add_edge(parent, txid)
-                self.draw(node)
+                # self.draw(node)
 
         with time_block("Updating Weights", node_name=node.name): # self.loggers[node.name], id=tx.txid
             self.update_weights_topological_order(node)

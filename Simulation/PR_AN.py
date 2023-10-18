@@ -7,19 +7,14 @@ def simulate(N, p, duration, observation_times):
     print("Initializing network...")
     network = Network(N, p)
     observer = Observer(network)
-    # observation_times = observer.generate_observation_times(end_time=60, num_observations=3)
     print(observation_times)
     print("Network initialized.")
-
     for _ in range(duration):
         print(f"Simulating second {_}...")
         network.simulate_second()
         if _ in observation_times:
             print("GOING IN OBSERVER")
             observer.observe_nodes([_])  # observe at this second
-            # observer.analyse_transactions()
-            # observer.analyse_tips()
-            # print(f"Time: {_}, {observer.assess_node_convergence(_)}")
         print(f"Finished simulating second {_}.")
     # Count transactions for each node
     transaction_counts = [len(node.queue) for node in network.nodes]
@@ -58,18 +53,10 @@ if __name__ == '__main__':
     observer.plot_tip_frequencies(tip_frequencies)
     observer.plot_tips_over_time()
     observer.plot_tip_validation_distribution()
-    # Assuming you want the average tip lifetime and confirmation rate for all observed tips
-
-
     avg_tip_lifetime = observer.compute_average_tip_lifetime()
     print(f"Average Tip Lifetime: {avg_tip_lifetime}")
-
     confirmation_rate = observer.tip_confirmation_rate()
     print(f"Tip Confirmation Rate: {confirmation_rate}")
-
-    # observer.plot_pairwise_overlap_heatmap('all_transactions')
-    # observer.plot_average_overlap_heatmap('all_transactions')
-    # observer.plot_jaccard_similarity_heatmap('all_transactions')
     observer.visualize()
 
 
