@@ -8,10 +8,10 @@ DIFFICULTY =1
 
 if __name__ == '__main__':
     print("Starting simulation...")
-    num_nodes = 20
+    num_nodes = 4
     # poisson_rate = 0.3
-    milestones_interval = 120
-    sim_time = 60 # Add the simulation_time
+    milestones_interval = 7
+    sim_time = 0.15 # Add the simulation_time
     # Create the network
     network = Network(num_nodes)
     # Nodes without coordinator
@@ -19,7 +19,7 @@ if __name__ == '__main__':
     # Desired total rate for the tangle
     lambda_total = 100
     # Generate random rates for each node
-    random_rates = [random.uniform(0.001, 0.01) for node in nodes_without_coordinator]
+    random_rates = [random.uniform(0.000000001, 0.000000001) for node in nodes_without_coordinator]
     # Calculate the sum of these random rates
     sum_random_rates = sum(random_rates)
     # Normalize the random rates to sum up to lambda_total

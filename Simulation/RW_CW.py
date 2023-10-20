@@ -32,11 +32,11 @@ def parse_file_name(file_name):
     N = parts[0][1:]
     alpha = parts[1]
 
-    # Extract the W value without 's' and '.txt' and split it into start and end values
+    # Extract the W value without 's' and '.txt'
     W_val = parts[2].split('s')[0].replace('.txt', '')
 
-    # Determine the splitting point based on the length
-    split_point = 2  # As we know that W_start is always of two digits in this case
+    # Adjust the split point based on the total length of W_val
+    split_point = len(W_val) // 2
     W_start, W_end = W_val[:split_point], W_val[split_point:]
 
     W = f"{W_start}-{W_end}s"
@@ -76,10 +76,12 @@ def plot_durations(durations_list, file_names):
         plt.plot(x_smooth, y_smooth, '--', color=colors[idx], markersize=2, linewidth=1, label=label)  # '--' for dashed line
 
     # Adding labels, title, and legend
-    plt.xlabel('Transaction Count')
-    plt.ylabel('Duration (Seconds)')
-    plt.title('Duration for One Node')
-    plt.legend(loc="upper left")
+    plt.xlabel('Transaction Count', fontsize=14, fontweight='bold')
+    plt.ylabel('Duration (Seconds)', fontsize=14, fontweight='bold')
+    plt.title('Duration for One Node', fontsize=16, fontweight='bold')
+    legend= plt.legend(loc="upper left", fontsize=12)
+    for text in legend.get_texts():
+        text.set_fontweight('bold')
     plt.xlim(0, max_transactions)  # Explicitly set the x-axis limits
     # Display the plot
     plt.grid(True)
@@ -102,9 +104,9 @@ def plot_weight_durations_line_graph(durations_list, file_names):
         plt.plot(x, y, '-', color=colors[idx], markersize=4, linewidth=2, label=label)  # '-' for solid line
 
 
-    plt.xlabel('Transaction Count')
-    plt.ylabel('Weight Update Duration (Seconds)')
-    plt.title('Weight Update Duration for One Node')
+    plt.xlabel('Transaction Count', fontsize=14, fontweight='bold')
+    plt.ylabel('Weight Update Duration (Seconds)', fontsize=14, fontweight='bold')
+    plt.title('Weight Update Duration for One Node', fontsize=16, fontweight='bold')
     # plt.legend(loc="upper right")
     plt.grid(True)
     plt.tight_layout()
@@ -114,7 +116,7 @@ def main():
     all_file_paths = [
         [
             'timings_dir/N2_0.01_60120.txt',
-            'timings_dir/N4_0.01_60120.txt',
+            #'timings_dir/N4_0.01_60120.txt',
             'timings_dir/N6_0.01_60120.txt',
             'timings_dir/N2_0.0_60120.txt',
             'timings_dir/N4_0.0_60120.txt',
@@ -125,7 +127,7 @@ def main():
         ],
         [
             'timings_dir/N2_0.01_120240.txt',
-            'timings_dir/N4_0.01_120240.txt',
+            #'timings_dir/N4_0.01_120240.txt',
             'timings_dir/N6_0.01_120240.txt',
             'timings_dir/N2_0.0_120240.txt',
             'timings_dir/N4_0.0_120240.txt',
@@ -137,8 +139,8 @@ def main():
     ]
 
     all_nodes = [
-        ["(Node: Node 4)"] * 9,
-        ["(Node: Node 4)"] * 9
+        ["(Node: Node 4)"] * 8,
+        ["(Node: Node 4)"] * 8
     ]
 
     for file_paths, nodes in zip(all_file_paths, all_nodes):
@@ -155,8 +157,8 @@ def main():
             weights_durations_list.append(weight_durations)
 
         plot_durations(durations_list, file_names)
-        # Uncomment the below line if you have a function to plot the weights updating durations
-        # plot_weight_durations_line_graph(weights_durations_list, file_names)
+        #Uncomment the below line if you have a function to plot the weights updating durations
+        plot_weight_durations_line_graph(weights_durations_list, file_names)
 
 
 if __name__ == "__main__":

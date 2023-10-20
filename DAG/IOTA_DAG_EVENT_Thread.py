@@ -301,11 +301,11 @@ class IOTA_DAG:
                 depth_map[tx.txid] = max((depth_map[parent_txid] + 1 for parent_txid in tx.parent_txids),default= 0)
                 max_depth = max(max_depth, depth_map[tx.txid])
             elif tx.is_confirmed or tx.txid == '0':
-                node_colors[tx.txid] = 'green'  # green for confirmed transactions
+                node_colors[tx.txid] = '#b5e7a0'  # green for confirmed transactions
                 depth_map[tx.txid] = max((depth_map[parent_txid] + 1 for parent_txid in tx.parent_txids), default=0)
                 max_depth = max(max_depth, depth_map[tx.txid])
             else:
-                node_colors[tx.txid] = 'blue'  # blue for other nodes
+                node_colors[tx.txid] = '#a6c1ee'  # blue for other nodes
                 depth_map[tx.txid] = max((depth_map[parent_txid] + 1 for parent_txid in tx.parent_txids),default= 0)
                 max_depth = max(max_depth, depth_map[tx.txid])
 
@@ -329,12 +329,12 @@ class IOTA_DAG:
             for parent_txid in tx.parent_txids:
                 G.add_edge(tx.txid, parent_txid)
                 # G.add_edge(parent_txid, tx.txid)
-                edge_colors.append('grey' if parent_txid == '0' else 'blue')
+                edge_colors.append('grey' if parent_txid == '0' else 'grey')
 
         # Draw the graph
         plt.figure(figsize=(10, 5))
         nx.draw(G, pos=pos, node_color=node_colors_list, node_size=1000, node_shape='s', edge_color=edge_colors)
-        nx.draw_networkx_labels(G, pos, labels=node_labels, font_size=8)
+        nx.draw_networkx_labels(G, pos, labels=node_labels, font_size=9, font_weight='bold')
         plt.title(f'Batch {self.current_batch}')
         # plt.ylim(0, max(level_size for level_size in depth_map.values())) # Adjust ylim based on maximum level_size
         plt.ylim(0, 1)  # Make sure all nodes fit in the figure
