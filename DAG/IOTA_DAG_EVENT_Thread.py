@@ -333,8 +333,8 @@ class IOTA_DAG:
 
         # Draw the graph
         plt.figure(figsize=(10, 5))
-        nx.draw(G, pos=pos, node_color=node_colors_list, node_size=1000, node_shape='s', edge_color=edge_colors)
-        nx.draw_networkx_labels(G, pos, labels=node_labels, font_size=9, font_weight='bold')
+        nx.draw(G, pos=pos, node_color=node_colors_list, node_size=1500, node_shape='s', edge_color=edge_colors)
+        nx.draw_networkx_labels(G, pos, labels=node_labels, font_size=12, font_weight='bold')
         plt.title(f'Batch {self.current_batch}')
         # plt.ylim(0, max(level_size for level_size in depth_map.values())) # Adjust ylim based on maximum level_size
         plt.ylim(0, 1)  # Make sure all nodes fit in the figure
